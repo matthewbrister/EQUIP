@@ -10,7 +10,7 @@ const STORAGE_KEYS = {
 
 const DEFAULT_SETTINGS = {
   theme: 'light', // 'light' | 'dark'
-  accent: 'blue', // 'blue' | 'slate' | 'teal' | 'indigo'
+  accent: 'slate', // 'blue' | 'slate' | 'teal' | 'indigo'
   density: 'comfortable', // 'comfortable' | 'compact'
   cardStyle: 'bordered' // 'bordered' | 'flat'
 };
@@ -244,7 +244,7 @@ class EquipStore {
     const s = settings || this.getSettings();
     const root = document.documentElement;
     root.setAttribute('data-theme', s.theme || 'light');
-    root.setAttribute('data-accent', s.accent || 'blue');
+    root.setAttribute('data-accent', s.accent || 'slate');
     root.setAttribute('data-density', s.density || 'comfortable');
     root.setAttribute('data-card-style', s.cardStyle || 'bordered');
   }
