@@ -3,6 +3,32 @@
 
 export const INITIAL_PROGRAMS = [
   {
+    id: "prog-vilonia-hs",
+    name: "Vilonia High School EAST",
+    code: "EQ-V7HS-K3N9",
+    status: "approved",
+    location: "Vilonia, AR (Vilonia School District)",
+    campusRoomNumber: "Room TBD",
+    description: "EAST at Vilonia High School empowers students to solve real community problems through self-directed service learning and technology.",
+    photo: "https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=1200&auto=format&fit=crop&q=80",
+    showTechnologyPublicly: false,
+    showProjectsPublicly: false,
+    periods: [],
+    roster: [],
+    facilitator: {
+      id: "prog-vilonia-hs-fac",
+      name: "Erin Rappold",
+      title: "EAST Facilitator",
+      email: "facilitator@example.org",
+      phone: "",
+      officeHours: "Mon-Thu 8:00 AM - 4:15 PM",
+      avatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&auto=format&fit=crop&q=80",
+      status: "approved"
+    },
+    technologies: [],
+    projects: []
+  },
+  {
     id: "prog-bwest",
     name: "Bentonville West High EAST",
     code: "EQ-7K9B-M4W2",
@@ -11,6 +37,21 @@ export const INITIAL_PROGRAMS = [
     campusRoomNumber: "Building B, Room 402 - Innovation & Technology Lab",
     description: "EAST at Bentonville West empowers students to solve real-world community problems through self-directed service learning and advanced industry technology.",
     photo: "https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=1200&auto=format&fit=crop&q=80",
+    periods: [
+      { id: "per-bw-1", name: "Period 1" },
+      { id: "per-bw-2", name: "Period 2" },
+      { id: "per-bw-5", name: "Period 5" }
+    ],
+    roster: [
+      {
+        studentId: "stud-1",
+        name: "Caden Miller",
+        email: "cmiller@students.bentonvillek12.org",
+        grade: "11th Grade",
+        joinedAt: "2026-09-02T13:00:00Z",
+        periodId: "per-bw-2"
+      }
+    ],
     facilitator: {
       id: "fac-1",
       name: "Sarah Jenkins",
@@ -338,30 +379,6 @@ export const INITIAL_PROGRAMS = [
     projects: []
   },
   {
-    id: "prog-vilonia-hs",
-    name: "Vilonia High School EAST",
-    code: "EQ-V7HS-K3N9",
-    status: "approved",
-    location: "Vilonia, AR (Vilonia School District)",
-    campusRoomNumber: "Room TBD",
-    description: "EAST at Vilonia High School empowers students to solve real community problems through self-directed service learning and technology.",
-    photo: "https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=1200&auto=format&fit=crop&q=80",
-    showTechnologyPublicly: false,
-    showProjectsPublicly: false,
-    facilitator: {
-      id: "prog-vilonia-hs-fac",
-      name: "Facilitator TBD",
-      title: "EAST Facilitator",
-      email: "facilitator@example.org",
-      phone: "",
-      officeHours: "Mon-Thu 8:00 AM - 4:15 PM",
-      avatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&auto=format&fit=crop&q=80",
-      status: "approved"
-    },
-    technologies: [],
-    projects: []
-  },
-  {
     id: "prog-vilonia-jh",
     name: "Vilonia Junior High School EAST",
     code: "EQ-V4JH-M8Q2",
@@ -372,9 +389,11 @@ export const INITIAL_PROGRAMS = [
     photo: "https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=1200&auto=format&fit=crop&q=80",
     showTechnologyPublicly: false,
     showProjectsPublicly: false,
+    periods: [],
+    roster: [],
     facilitator: {
       id: "prog-vilonia-jh-fac",
-      name: "Facilitator TBD",
+      name: "Matthew Cain",
       title: "EAST Facilitator",
       email: "facilitator@example.org",
       phone: "",
@@ -411,6 +430,9 @@ export const INITIAL_FACILITATOR_REQUESTS = [
     notes: "New training cohort graduate."
   }
 ];
+
+// The program shown first and preselected in the public directory
+export const DEFAULT_PROGRAM_ID = "prog-vilonia-hs";
 
 export const DEMO_USERS = {
   facilitatorApproved: {

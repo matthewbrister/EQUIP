@@ -39,7 +39,7 @@ export default function ManagerAdminView({ setCurrentView, onSelectRole }) {
           </p>
         </div>
 
-        <button 
+        <button
           className="btn btn-secondary btn-sm"
           onClick={() => {
             if (window.confirm("Restore sample default data?")) {
@@ -54,7 +54,7 @@ export default function ManagerAdminView({ setCurrentView, onSelectRole }) {
 
       {/* Tabs */}
       <div className="tabs-header">
-        <button 
+        <button
           className={`tab-btn ${activeTab === 'facilitators' ? 'active' : ''}`}
           onClick={() => setActiveTab('facilitators')}
         >
@@ -62,7 +62,7 @@ export default function ManagerAdminView({ setCurrentView, onSelectRole }) {
           <span>Facilitator Accounts ({pendingRequests.length} Pending)</span>
         </button>
 
-        <button 
+        <button
           className={`tab-btn ${activeTab === 'programs' ? 'active' : ''}`}
           onClick={() => setActiveTab('programs')}
         >
@@ -95,7 +95,7 @@ export default function ManagerAdminView({ setCurrentView, onSelectRole }) {
                       </div>
                       <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>{req.name}</h3>
                       <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>
-                        {req.email} • Google OAuth Token Verified
+                        {req.email} • {req.googleAuthId ? 'Google OAuth Token Verified' : 'Email not independently verified'}
                       </div>
                       <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                         {req.notes}
@@ -103,13 +103,13 @@ export default function ManagerAdminView({ setCurrentView, onSelectRole }) {
                     </div>
 
                     <div style={{ display: 'flex', gap: '0.5rem' }}>
-                      <button 
+                      <button
                         className="btn btn-secondary btn-sm"
                         onClick={() => handleRejectFacilitator(req.id)}
                       >
                         Reject
                       </button>
-                      <button 
+                      <button
                         className="btn btn-success btn-sm"
                         onClick={() => handleApproveFacilitator(req.id)}
                       >
@@ -183,7 +183,7 @@ export default function ManagerAdminView({ setCurrentView, onSelectRole }) {
                       </p>
                     </div>
 
-                    <button 
+                    <button
                       className="btn btn-success btn-sm"
                       onClick={() => handleApproveProgram(prog.id)}
                     >

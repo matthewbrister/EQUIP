@@ -976,3 +976,171 @@ select {
     transition: none;
   }
 }
+
+/* Chips: class period filters and tags */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 2px 10px;
+  border-radius: var(--radius-full);
+  font-size: 0.76rem;
+  font-weight: 600;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: var(--transition-fade);
+}
+
+.chip:hover {
+  background: var(--bg-subtle);
+}
+
+.chip.active {
+  background: var(--color-primary-light);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.chip-tag {
+  cursor: default;
+  background: var(--color-primary-light);
+  border-color: var(--color-primary-border);
+  color: var(--color-primary);
+  padding: 1px 8px;
+  font-size: 0.72rem;
+}
+
+.chip-tag:hover {
+  background: var(--color-primary-light);
+}
+
+/* Hide the "EAST" tag beside the logo in the navbar */
+.brand-wrapper .brand-tag-east {
+  display: none;
+}
+
+/* Auth setup steps */
+.auth-step {
+  animation: authStepIn 260ms ease-out both;
+}
+
+.auth-step.back {
+  animation-name: authStepInBack;
+}
+
+@keyframes authStepIn {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes authStepInBack {
+  from {
+    opacity: 0;
+    transform: translateX(-24px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.auth-chooser {
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  padding: 1rem;
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-md);
+}
+
+.auth-chooser-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.55rem 0.5rem;
+  border-radius: var(--radius-sm);
+  transition: var(--transition-fade);
+}
+
+.auth-chooser-row:hover {
+  background: var(--bg-subtle);
+}
+
+.auth-spinner {
+  width: 28px;
+  height: 28px;
+  margin: 0 auto;
+  border: 3px solid var(--border-strong);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: authSpin 700ms linear infinite;
+}
+
+@keyframes authSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Success checkmark */
+.checkmark-wrap {
+  display: inline-block;
+  animation: checkPop 400ms ease 900ms both;
+}
+
+.checkmark-circle {
+  stroke-dasharray: 164;
+  stroke-dashoffset: 164;
+  animation: checkDraw 600ms ease forwards;
+}
+
+.checkmark-check {
+  stroke-dasharray: 48;
+  stroke-dashoffset: 48;
+  animation: checkDraw 350ms ease 500ms forwards;
+}
+
+@keyframes checkDraw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes checkPop {
+  0% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.1);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  .auth-step,
+  .checkmark-wrap,
+  .checkmark-circle,
+  .checkmark-check {
+    animation-duration: 1ms;
+    animation-delay: 0ms;
+  }
+
+  .auth-spinner {
+    animation-duration: 2s;
+  }
+}

@@ -8,23 +8,58 @@ import StudentCodeView from './views/StudentCodeView';
 import StudentDashboardView from './views/StudentDashboardView';
 import PublicProgramView from './views/PublicProgramView';
 import ManagerAdminView from './views/ManagerAdminView';
-import AuthModal from './components/Modals/AuthModal';
+import AuthView from './views/AuthView';
+import AboutView from './views/AboutView';
 import SettingsModal from './components/Modals/SettingsModal';
 import EntryGate from './components/EntryGate';
 import FeedbackTour, { FeedbackPill } from './components/FeedbackTour';
+import FeedbackRolePicker from './components/FeedbackRolePicker';
 import { equipStore } from './data/store';
 import { DEMO_USERS } from './data/mockData';
 
 const MODE_KEY = 'equip-entry-mode';
+const DONE_KEY = 'equip-feedback-done';
+
+// Which pages need which kind of account. Anything else is public.
+const guardView = (view, user) => {
+  const role = user?.role;
+  switch (view) {
+    case 'facilitator':
+    case 'program-create':
+      return role === 'facilitator' ? view : 'auth';
+    case 'join':
+      return role === 'student' ? view : 'auth';
+    case 'student':
+      // Students see no dashboard until they have joined a program with a code
+      if (role !== 'student') return 'auth';
+      return user.programId ? view : 'join';
+    case 'manager':
+      return role === 'manager' ? view : 'auth';
+    default:
+      return view;
+  }
+};
+
+const presetFor = (view) => ({
+  mode: view === 'join' || view === 'student' ? 'signup' : 'signin',
+  role: view === 'facilitator' || view === 'program-create' ? 'facilitator' : 'student'
+});
 
 export default function App() {
   const [entryMode, setEntryMode] = useState(() => {
     try { return sessionStorage.getItem(MODE_KEY); } catch { return null; }
   });
   const [tourActive, setTourActive] = useState(false);
+  const [tourRole, setTourRole] = useState(null);
+  const [pickerOpen, setPickerOpen] = useState(() => {
+    try { return sessionStorage.getItem(MODE_KEY) === 'feedback'; } catch { return false; }
+  });
+  const [doneRoles, setDoneRoles] = useState(() => {
+    try { return JSON.parse(sessionStorage.getItem(DONE_KEY)) || []; } catch { return []; }
+  });
   const [currentView, setCurrentView] = useState('landing');
   const [currentUser, setCurrentUser] = useState(equipStore.getCurrentUser());
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authPreset, setAuthPreset] = useState(null);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [, setTick] = useState(0);
 
@@ -50,7 +85,10 @@ export default function App() {
     setCurrentView(view);
   };
 
-  const navigate = useCallback((view) => {
+  const navigate = useCallback((requested) => {
+    // Send people to the sign-in page when a page needs an account they don't have
+    const view = guardView(requested, equipStore.getCurrentUser());
+    if (view === 'auth' && requested !== 'auth') setAuthPreset(presetFor(requested));
     if (view === pendingView.current) return;
     pendingView.current = view;
     navTimers.current.forEach(clearTimeout);
@@ -64,8 +102,38 @@ export default function App() {
     }, 150));
   }, []);
 
+  // Safety net: if the user changes (e.g. signs out) while on a protected page
+  useEffect(() => {
+    if (tourActive) return; // the walkthrough hops between demo roles on purpose
+    const target = guardView(currentView, currentUser);
+    if (target !== currentView) {
+      if (target === 'auth') setAuthPreset(presetFor(currentView));
+      jump(target);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentView, currentUser, tourActive]);
+
+  const openAuth = () => {
+    setAuthPreset({ mode: 'signin', role: 'student' });
+    navigate('auth');
+  };
+
+  const handleAuthSuccess = (user) => {
+    if (user.role === 'manager') navigate('manager');
+    else if (user.role === 'facilitator') navigate('facilitator');
+    else if (user.role === 'student') navigate(user.programId ? 'student' : 'join');
+    else navigate('landing');
+  };
+
+  const handleSignOut = () => {
+    equipStore.signOut();
+    setCurrentUser(equipStore.getCurrentUser());
+    navigate('landing');
+  };
+
   const handleSelectRole = (roleKey) => {
-    equipStore.switchRole(roleKey);
+    if (roleKey === 'guest') equipStore.signOut();
+    else equipStore.switchRole(roleKey);
     setCurrentUser(equipStore.getCurrentUser());
   };
 
@@ -73,23 +141,51 @@ export default function App() {
     try { sessionStorage.setItem(MODE_KEY, mode); } catch { /* ignore */ }
     setEntryMode(mode);
     jump('landing');
-    if (mode === 'feedback') setTourActive(true);
+    setPickerOpen(mode === 'feedback');
   };
 
   const resetMode = () => {
     try { sessionStorage.removeItem(MODE_KEY); } catch { /* ignore */ }
     setTourActive(false);
+    setPickerOpen(false);
     setEntryMode(null);
     jump('landing');
   };
 
-  const finishTour = () => {
+  const startTour = (role) => {
+    setTourRole(role);
+    setPickerOpen(false);
+    jump('landing');
+    setTourActive(true);
+  };
+
+  // Back to the role list; the tour just taken is marked complete if they pressed Done
+  const finishTour = ({ completed }) => {
+    if (completed && tourRole) {
+      const next = Array.from(new Set([...doneRoles, tourRole]));
+      setDoneRoles(next);
+      try { sessionStorage.setItem(DONE_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+    }
     setTourActive(false);
-    navigate('landing');
+    equipStore.signOut();
+    setCurrentUser(equipStore.getCurrentUser());
+    jump('landing');
+    setPickerOpen(true);
   };
 
   if (!entryMode) {
     return <EntryGate onChoose={chooseMode} />;
+  }
+
+  if (entryMode === 'feedback' && pickerOpen && !tourActive) {
+    return (
+      <FeedbackRolePicker
+        completed={doneRoles}
+        onPick={startTour}
+        onExplore={() => { equipStore.signOut(); setCurrentUser(equipStore.getCurrentUser()); jump('landing'); setPickerOpen(false); }}
+        onBack={resetMode}
+      />
+    );
   }
 
   const renderCurrentView = () => {
@@ -101,12 +197,25 @@ export default function App() {
             onSelectRole={handleSelectRole}
           />
         );
+      case 'about':
+        return <AboutView setCurrentView={navigate} />;
+      case 'auth':
+        return (
+          <AuthView
+            currentUser={currentUser}
+            preset={authPreset}
+            onAuthSuccess={handleAuthSuccess}
+            onSelectRole={handleSelectRole}
+            onSignOut={handleSignOut}
+          />
+        );
       case 'facilitator':
         return (
           <FacilitatorDashboardView
             currentUser={currentUser}
             setCurrentView={navigate}
             onSelectRole={handleSelectRole}
+            onSignOut={handleSignOut}
           />
         );
       case 'program-create':
@@ -159,7 +268,7 @@ export default function App() {
         currentView={currentView}
         setCurrentView={navigate}
         currentUser={currentUser}
-        onOpenAuth={() => setIsAuthModalOpen(true)}
+        onOpenAuth={openAuth}
         onOpenSettings={() => setIsSettingsModalOpen(true)}
       />
 
@@ -169,13 +278,6 @@ export default function App() {
 
       <Footer onOpenSettings={() => setIsSettingsModalOpen(true)} />
 
-      <AuthModal
-        isOpen={isAuthModalOpen}
-        onClose={() => setIsAuthModalOpen(false)}
-        currentUser={currentUser}
-        onSelectRole={handleSelectRole}
-      />
-
       <SettingsModal
         isOpen={isSettingsModalOpen}
         onClose={() => setIsSettingsModalOpen(false)}
@@ -183,6 +285,8 @@ export default function App() {
 
       {entryMode === 'feedback' && tourActive && (
         <FeedbackTour
+          key={tourRole}
+          role={tourRole}
           currentView={currentView}
           setCurrentView={navigate}
           onSelectRole={handleSelectRole}
@@ -191,7 +295,7 @@ export default function App() {
       )}
 
       {entryMode === 'feedback' && !tourActive && (
-        <FeedbackPill onRestart={() => setTourActive(true)} onSwitchMode={resetMode} />
+        <FeedbackPill onTours={() => setPickerOpen(true)} onExit={resetMode} />
       )}
     </div>
   );

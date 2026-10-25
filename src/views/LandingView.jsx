@@ -1,8 +1,11 @@
 import React from 'react';
 import { equipStore } from '../data/store';
+import { DEFAULT_PROGRAM_ID } from '../data/mockData';
 
 export default function LandingView({ setCurrentView, onSelectRole }) {
-  const programs = equipStore.getPrograms().filter(p => p.status === 'approved');
+  const programs = equipStore.getPrograms()
+    .filter(p => p.status === 'approved')
+    .sort((a, b) => (b.id === DEFAULT_PROGRAM_ID) - (a.id === DEFAULT_PROGRAM_ID));
 
   // Two identical halves so the marquee loops seamlessly
   const half = programs.length ? Array.from({ length: Math.ceil(4 / programs.length) }, () => programs).flat() : [];
@@ -55,34 +58,19 @@ export default function LandingView({ setCurrentView, onSelectRole }) {
             </p>
 
             <div data-tour="hero-actions" style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', flexWrap: 'wrap' }}>
-              <button
-                className="btn btn-primary"
-                onClick={() => {
-                  onSelectRole('facilitatorApproved');
-                  setCurrentView('facilitator');
-                }}
-              >
-                <i className='bx bx-chalkboard'></i>
-                <span>Facilitator Hub</span>
+              <button className="btn btn-primary btn-lg" onClick={() => setCurrentView('auth')}>
+                <i className='bx bx-log-in'></i>
+                <span>Log In</span>
               </button>
 
-              <button
-                className="btn btn-secondary"
-                onClick={() => {
-                  onSelectRole('studentNew');
-                  setCurrentView('join');
-                }}
-              >
-                <i className='bx bx-key'></i>
-                <span>Enter Access Code</span>
-              </button>
-
-              <button
-                className="btn btn-secondary"
-                onClick={() => setCurrentView('public')}
-              >
+              <button className="btn btn-secondary btn-lg" onClick={() => setCurrentView('public')}>
                 <i className='bx bx-globe'></i>
                 <span>Public Directory</span>
+              </button>
+
+              <button className="btn btn-secondary btn-lg" onClick={() => setCurrentView('about')}>
+                <i className='bx bx-info-circle'></i>
+                <span>Learn More About EQUIP</span>
               </button>
             </div>
           </div>
@@ -139,10 +127,6 @@ export default function LandingView({ setCurrentView, onSelectRole }) {
                 Browse active EAST school programs across Arkansas.
               </p>
             </div>
-            <button className="btn btn-secondary btn-sm" onClick={() => setCurrentView('public')}>
-              <span>View All</span>
-              <i className='bx bx-right-arrow-alt'></i>
-            </button>
           </div>
         </div>
 
@@ -172,13 +156,6 @@ export default function LandingView({ setCurrentView, onSelectRole }) {
                         <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                           Facilitator: <strong>{prog.facilitator?.name}</strong>
                         </span>
-                        <button
-                          className="btn btn-secondary btn-sm"
-                          tabIndex={isDuplicate ? -1 : 0}
-                          onClick={() => setCurrentView('public')}
-                        >
-                          View
-                        </button>
                       </div>
                     </div>
                   </div>

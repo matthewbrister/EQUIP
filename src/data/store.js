@@ -5,7 +5,8 @@ const STORAGE_KEYS = {
   PROGRAMS: 'equip_programs_v1',
   FACILITATOR_REQUESTS: 'equip_fac_requests_v1',
   CURRENT_USER: 'equip_current_user_v1',
-  SETTINGS: 'equip_settings_v1'
+  SETTINGS: 'equip_settings_v1',
+  ACCOUNTS: 'equip_accounts_v1'
 };
 
 const DEFAULT_SETTINGS = {
@@ -29,6 +30,27 @@ export function generateSecureAccessCode() {
   return `EQ-${p1}-${p2}`;
 }
 
+// Initials avatar (inline SVG) for accounts created on this site
+export function avatarFor(name = '?') {
+  const initials = name.trim().split(/\s+/).slice(0, 2).map(w => w[0]?.toUpperCase() || '').join('') || '?';
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96"><rect width="96" height="96" fill="#475569"/><text x="48" y="60" font-family="Arial,sans-serif" font-size="38" font-weight="700" fill="#ffffff" text-anchor="middle">${initials}</text></svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
+export const GUEST_USER = {
+  id: 'guest',
+  name: 'Guest',
+  email: '',
+  role: 'guest',
+  programId: null,
+  avatar: avatarFor('Guest')
+};
+
+// NOTE: front-end mock. "Sign in with Google" is simulated: accounts live in this
+// browser's localStorage. Swap the signInWithGoogle / createAccountFromGoogle
+// methods for real Google OAuth + a backend when the project goes live.
+const fail = (message) => ({ success: false, message });
+
 class EquipStore {
   constructor() {
     this.subscribers = new Set();
@@ -44,6 +66,19 @@ class EquipStore {
         // Upgrade any old short codes to secure brute-force resistant codes
         const progs = JSON.parse(storedPrograms);
         let changed = false;
+
+        // Make sure every program has class periods and a roster
+        progs.forEach(p => {
+          const seed = INITIAL_PROGRAMS.find(s => s.id === p.id);
+          if (!p.periods) {
+            p.periods = seed?.periods ? JSON.parse(JSON.stringify(seed.periods)) : [];
+            changed = true;
+          }
+          if (!p.roster) {
+            p.roster = seed?.roster ? JSON.parse(JSON.stringify(seed.roster)) : [];
+            changed = true;
+          }
+        });
 
         // Add any newly shipped sample programs missing from saved data
         INITIAL_PROGRAMS.forEach(seed => {
@@ -70,7 +105,7 @@ class EquipStore {
 
       const storedUser = localStorage.getItem(STORAGE_KEYS.CURRENT_USER);
       if (!storedUser) {
-        localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(DEMO_USERS.facilitatorApproved));
+        localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(GUEST_USER));
       }
 
       // Initialize and apply theme & layout settings
@@ -99,25 +134,123 @@ class EquipStore {
   getCurrentUser() {
     try {
       const u = localStorage.getItem(STORAGE_KEYS.CURRENT_USER);
-      return u ? JSON.parse(u) : DEMO_USERS.facilitatorApproved;
+      return u ? JSON.parse(u) : GUEST_USER;
     } catch {
-      return DEMO_USERS.facilitatorApproved;
+      return GUEST_USER;
     }
   }
 
   setCurrentUser(user) {
     try {
       localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(user));
+      this.syncAccount(user);
       this.notify();
     } catch (e) {
       console.error(e);
     }
   }
 
+  // Keep the saved account in step with the signed-in user (programId, status, etc.)
+  syncAccount(user) {
+    if (!user?.id) return;
+    const accounts = this.getAccounts();
+    const i = accounts.findIndex(a => a.id === user.id);
+    if (i < 0) return;
+    accounts[i] = { ...accounts[i], ...user };
+    this.saveAccounts(accounts);
+  }
+
   switchRole(roleKey) {
-    if (DEMO_USERS[roleKey]) {
-      this.setCurrentUser(DEMO_USERS[roleKey]);
+    let user = DEMO_USERS[roleKey];
+    if (!user) return;
+    // Reflect manager approval of the pending demo facilitator
+    if (user.role === 'facilitator' && user.facilitatorStatus === 'pending') {
+      const req = this.getFacilitatorRequests().find(r => r.id === user.id);
+      if (req?.status === 'approved') user = { ...user, facilitatorStatus: 'approved' };
     }
+    this.setCurrentUser(user);
+  }
+
+  // --- Accounts & Authentication (front-end demo; see note above) ---
+  getAccounts() {
+    try {
+      const data = localStorage.getItem(STORAGE_KEYS.ACCOUNTS);
+      return data ? JSON.parse(data) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  saveAccounts(list) {
+    localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(list));
+  }
+
+  findAccountByEmail(email) {
+    const clean = (email || '').trim().toLowerCase();
+    return this.getAccounts().find(a => a.email === clean) || null;
+  }
+
+  // Mock Google sign-in for an existing account
+  signInWithGoogle(profile) {
+    const account = this.findAccountByEmail(profile?.email);
+    if (!account) return fail('No account found for that Google account.');
+    this.setCurrentUser(account);
+    return { success: true, user: account };
+  }
+
+  // Mock account creation from a Google profile + the setup answers
+  createAccountFromGoogle({ profile, role, grade }) {
+    if (!profile?.email) return fail('Missing Google profile.');
+    if (!['student', 'facilitator'].includes(role)) return fail('Please choose an account type.');
+    if (role === 'student' && !grade) return fail('Please choose your grade.');
+
+    const email = profile.email.trim().toLowerCase();
+    if (this.findAccountByEmail(email)) return fail('An account already exists for that Google account.');
+
+    const name = `${profile.firstName} ${profile.lastName}`.trim();
+    const id = `${role === 'student' ? 'stud' : 'fac'}-${Date.now()}`;
+    const base = {
+      id,
+      name,
+      firstName: profile.firstName,
+      lastName: profile.lastName,
+      email,
+      role,
+      programId: null,
+      avatar: profile.picture || avatarFor(name),
+      authProvider: 'google',
+      createdAt: new Date().toISOString()
+    };
+    const user = role === 'student'
+      ? { ...base, grade }
+      : { ...base, facilitatorStatus: 'pending', school: email.split('@')[1] || '' };
+
+    const accounts = this.getAccounts();
+    accounts.push(user);
+    this.saveAccounts(accounts);
+
+    if (role === 'facilitator') {
+      const requests = this.getFacilitatorRequests();
+      requests.unshift({
+        id,
+        name,
+        email,
+        school: user.school || 'Not provided',
+        role: 'EAST Facilitator Candidate',
+        googleAuthId: `mock-google|${id}`,
+        submittedAt: new Date().toISOString(),
+        status: 'pending',
+        notes: 'Signed up with Google. Verify against the school faculty directory before approving.'
+      });
+      localStorage.setItem(STORAGE_KEYS.FACILITATOR_REQUESTS, JSON.stringify(requests));
+    }
+
+    this.setCurrentUser(user);
+    return { success: true, user };
+  }
+
+  signOut() {
+    this.setCurrentUser(GUEST_USER);
   }
 
   // --- Program Management ---
@@ -170,6 +303,8 @@ class EquipStore {
       },
       showTechnologyPublicly: !!programInput.showTechnologyPublicly,
       showProjectsPublicly: !!programInput.showProjectsPublicly,
+      periods: [],
+      roster: [],
       technologies: [],
       projects: []
     };
@@ -255,13 +390,111 @@ class EquipStore {
     if (!program) {
       return { success: false, message: 'Invalid or unknown EAST Program Access Code.' };
     }
-    // Update student's programId
-    const updatedUser = {
-      ...studentUser,
-      programId: program.id
-    };
-    this.setCurrentUser(updatedUser);
-    return { success: true, program };
+    if (studentUser?.role !== 'student') {
+      return { success: false, message: 'Only student accounts can join a program roster.' };
+    }
+
+    const programs = this.getPrograms();
+
+    // A student belongs to one program: leave any previous roster
+    programs.forEach(p => {
+      if (p.id !== program.id && p.roster) {
+        p.roster = p.roster.filter(r => r.studentId !== studentUser.id);
+      }
+    });
+
+    const target = programs.find(p => p.id === program.id);
+    target.roster = target.roster || [];
+    if (!target.roster.some(r => r.studentId === studentUser.id)) {
+      target.roster.push({
+        studentId: studentUser.id,
+        name: studentUser.name,
+        email: studentUser.email,
+        grade: studentUser.grade || '',
+        joinedAt: new Date().toISOString(),
+        periodId: null
+      });
+    }
+    localStorage.setItem(STORAGE_KEYS.PROGRAMS, JSON.stringify(programs));
+
+    this.setCurrentUser({ ...studentUser, programId: program.id });
+    return { success: true, program: target };
+  }
+
+  // --- Class Periods & Roster (facilitator tools) ---
+  mutateProgram(programId, fn) {
+    const programs = this.getPrograms();
+    const program = programs.find(p => p.id === programId);
+    if (!program) return null;
+    const result = fn(program);
+    localStorage.setItem(STORAGE_KEYS.PROGRAMS, JSON.stringify(programs));
+    this.notify();
+    return result ?? true;
+  }
+
+  addPeriod(programId, name) {
+    const clean = (name || '').trim();
+    if (!clean) return fail('Enter a period name.');
+    return this.mutateProgram(programId, p => {
+      p.periods = p.periods || [];
+      if (p.periods.some(x => x.name.toLowerCase() === clean.toLowerCase())) {
+        return fail('That period already exists.');
+      }
+      const period = { id: `per-${Date.now()}-${Math.floor(Math.random() * 1000)}`, name: clean };
+      p.periods.push(period);
+      return { success: true, period };
+    }) || fail('Program not found.');
+  }
+
+  renamePeriod(programId, periodId, name) {
+    const clean = (name || '').trim();
+    if (!clean) return fail('Enter a period name.');
+    return this.mutateProgram(programId, p => {
+      p.periods = p.periods || [];
+      if (p.periods.some(x => x.id !== periodId && x.name.toLowerCase() === clean.toLowerCase())) {
+        return fail('That period already exists.');
+      }
+      p.periods = p.periods.map(x => (x.id === periodId ? { ...x, name: clean } : x));
+      return { success: true };
+    }) || fail('Program not found.');
+  }
+
+  deletePeriod(programId, periodId) {
+    this.mutateProgram(programId, p => {
+      p.periods = (p.periods || []).filter(x => x.id !== periodId);
+      p.roster = (p.roster || []).map(r => (r.periodId === periodId ? { ...r, periodId: null } : r));
+      p.projects = (p.projects || []).map(pr => ({
+        ...pr,
+        periodIds: (pr.periodIds || []).filter(id => id !== periodId)
+      }));
+    });
+  }
+
+  setStudentPeriod(programId, studentId, periodId) {
+    this.mutateProgram(programId, p => {
+      p.roster = (p.roster || []).map(r => (r.studentId === studentId ? { ...r, periodId: periodId || null } : r));
+    });
+  }
+
+  removeStudentFromRoster(programId, studentId) {
+    this.mutateProgram(programId, p => {
+      p.roster = (p.roster || []).filter(r => r.studentId !== studentId);
+    });
+    // Send the student back to the code screen next time they sign in
+    const accounts = this.getAccounts();
+    const i = accounts.findIndex(a => a.id === studentId);
+    if (i >= 0) {
+      accounts[i] = { ...accounts[i], programId: null };
+      this.saveAccounts(accounts);
+    }
+    const cu = this.getCurrentUser();
+    if (cu.id === studentId) this.setCurrentUser({ ...cu, programId: null });
+  }
+
+  setProjectPeriods(programId, projectId, periodIds) {
+    this.mutateProgram(programId, p => {
+      p.projects = (p.projects || []).map(pr => (pr.id === projectId ? { ...pr, periodIds: periodIds || [] } : pr));
+    });
   }
 
   // --- Technology Inventory Management ---
@@ -325,8 +558,11 @@ class EquipStore {
     const program = programs.find(p => p.id === programId);
     if (!program) return null;
 
+    const rosterEntry = (program.roster || []).find(r => r.studentId === studentUser.id);
+
     const newProject = {
       id: `proj-${Date.now()}`,
+      periodIds: rosterEntry?.periodId ? [rosterEntry.periodId] : [],
       name: projectInput.name,
       status: 'draft', // Saved as DRAFT until facilitator approves!
       submittedBy: studentUser.name || 'EAST Student',
@@ -412,11 +648,16 @@ class EquipStore {
     });
     localStorage.setItem(STORAGE_KEYS.FACILITATOR_REQUESTS, JSON.stringify(list));
 
-    // Also if current user is this facilitator, unlock them!
+    // Unlock the matching account, and the signed-in user if it is them
+    const accounts = this.getAccounts();
+    const i = accounts.findIndex(a => a.id === requestId);
+    if (i >= 0) {
+      accounts[i] = { ...accounts[i], facilitatorStatus: 'approved' };
+      this.saveAccounts(accounts);
+    }
     const currentUser = this.getCurrentUser();
-    if (currentUser.id === requestId || currentUser.role === 'facilitator') {
-      currentUser.facilitatorStatus = 'approved';
-      this.setCurrentUser(currentUser);
+    if (currentUser.id === requestId) {
+      this.setCurrentUser({ ...currentUser, facilitatorStatus: 'approved' });
     }
 
     this.notify();
@@ -430,6 +671,16 @@ class EquipStore {
       return req;
     });
     localStorage.setItem(STORAGE_KEYS.FACILITATOR_REQUESTS, JSON.stringify(list));
+
+    const accounts = this.getAccounts();
+    const i = accounts.findIndex(a => a.id === requestId);
+    if (i >= 0) {
+      accounts[i] = { ...accounts[i], facilitatorStatus: 'rejected' };
+      this.saveAccounts(accounts);
+    }
+    const cu = this.getCurrentUser();
+    if (cu.id === requestId) this.setCurrentUser({ ...cu, facilitatorStatus: 'rejected' });
+
     this.notify();
   }
 
@@ -437,7 +688,8 @@ class EquipStore {
   resetToDefault() {
     localStorage.setItem(STORAGE_KEYS.PROGRAMS, JSON.stringify(INITIAL_PROGRAMS));
     localStorage.setItem(STORAGE_KEYS.FACILITATOR_REQUESTS, JSON.stringify(INITIAL_FACILITATOR_REQUESTS));
-    localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(DEMO_USERS.facilitatorApproved));
+    localStorage.removeItem(STORAGE_KEYS.ACCOUNTS);
+    localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(GUEST_USER));
     this.notify();
   }
 }

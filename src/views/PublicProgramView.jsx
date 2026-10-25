@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
 import { equipStore } from '../data/store';
+import { DEFAULT_PROGRAM_ID } from '../data/mockData';
 import Dropdown from '../components/Dropdown';
 import TechDetailModal from '../components/Modals/TechDetailModal';
 import ProjectDetailModal from '../components/Modals/ProjectDetailModal';
 
 export default function PublicProgramView({ setCurrentView }) {
-  const programs = equipStore.getPrograms().filter(p => p.status === 'approved');
+  const programs = equipStore.getPrograms()
+    .filter(p => p.status === 'approved')
+    .sort((a, b) => (b.id === DEFAULT_PROGRAM_ID) - (a.id === DEFAULT_PROGRAM_ID));
   const [selectedProgramId, setSelectedProgramId] = useState(programs[0]?.id || '');
   const [selectedTech, setSelectedTech] = useState(null);
   const [selectedProject, setSelectedProject] = useState(null);

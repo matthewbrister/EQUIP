@@ -1,78 +1,51 @@
 import React, { useEffect, useLayoutEffect, useRef, useState, useCallback } from 'react';
 
 /*
-  Walkthrough steps. Each step can switch the view and/or the demo role, then
-  highlights an element found with `selector`. No selector = centered card.
+  Three walkthroughs, one per role. A step can switch the view and the demo
+  role, optionally click something first (`click`, e.g. a tab), then
+  highlights the element matching `selector` (no selector = centered card).
+  `role: 'guest'` signs out so the step shows what a visitor sees.
 */
-const FAC = 'Facilitator view';
-const MGR = 'Site manager view';
-
-const STEPS = [
-  {
-    section: FAC,
-    view: 'facilitator',
-    role: 'facilitatorApproved',
-    selector: null,
-    title: 'Welcome, and thank you!',
-    body: "We'll start with what a facilitator sees, then finish with what the site manager sees. Afterwards, explore freely and note anything confusing or missing."
+const TOURS = {
+  facilitator: {
+    label: 'Facilitator tour',
+    steps: [
+      { view: 'landing', role: 'guest', selector: null, title: 'Facilitator walkthrough', body: "This tour follows what a facilitator sees, from logging in to managing a program. Use Next to continue, or Skip to return to the role list." },
+      { view: 'landing', role: 'guest', selector: '[data-tour="hero-actions"]', title: 'The landing page', body: 'Visitors can log in, browse the public directory, or read about EQUIP. Facilitators start with Log In.' },
+      { view: 'auth', role: 'guest', selector: '[data-tour="auth-card"]', title: 'Signing up', body: 'Facilitators choose Sign Up, pick "Facilitator", connect Google, and confirm their details. A website manager must approve the account before a program can be created.' },
+      { view: 'facilitator', role: 'facilitatorApproved', selector: '[data-tour="program-header"]', title: 'Your program hub', body: 'Each facilitator manages one program here. The badge shows whether it is live in the public directory or still a draft.' },
+      { view: 'facilitator', role: 'facilitatorApproved', selector: '[data-tour="access-code"]', title: 'Student access code', body: 'Share this code with your students. Copy it, project it as a QR code, or regenerate it at any time.' },
+      { view: 'facilitator', role: 'facilitatorApproved', selector: '.tabs-header', title: 'Your workspace', body: 'Technology, projects, roster and program details each have a tab. We will visit the key ones next.' },
+      { view: 'facilitator', role: 'facilitatorApproved', click: '[data-tour="tab-roster"]', selector: '[data-tour="roster-periods"]', title: 'Roster and class periods', body: 'Students appear on your roster when they join with your code. Create class periods, then assign each student to one.' },
+      { view: 'facilitator', role: 'facilitatorApproved', click: '[data-tour="tab-projects"]', selector: '[data-tour="period-filter"]', title: 'Project review', body: 'Review student submissions and tag each project with one or more class periods. Use these filters to view a single period.' },
+      { view: 'facilitator', role: 'facilitatorApproved', click: '[data-tour="tab-settings"]', selector: '[data-tour="visibility-settings"]', title: 'What the public can see', body: 'Your technology inventory and student projects are private by default. Turn them on here if you want them in the public directory.' },
+      { view: 'program-create', role: 'facilitatorApproved', selector: 'form', title: 'Creating a program', body: 'New programs start as drafts until a website manager publishes them. You choose public visibility right here as well.' },
+      { view: 'facilitator', role: 'facilitatorApproved', selector: null, title: "You've finished the facilitator tour", body: 'Press Done to go back to the role list. This tour will be marked complete.' }
+    ]
   },
-  {
-    section: FAC,
-    view: 'facilitator',
-    role: 'facilitatorApproved',
-    selector: '[data-tour="program-header"]',
-    title: 'Your program hub',
-    body: 'Each facilitator manages one program here. The badge shows whether it is live in the public directory or still a draft awaiting approval.'
+  student: {
+    label: 'Student tour',
+    steps: [
+      { view: 'landing', role: 'guest', selector: null, title: 'Student walkthrough', body: 'This tour follows what a student sees, from creating an account to opening the dashboard. Use Next to continue, or Skip to return to the role list.' },
+      { view: 'landing', role: 'guest', selector: '[data-tour="hero-actions"]', title: 'The landing page', body: 'Students start with Log In. The public directory is open to everyone.' },
+      { view: 'auth', role: 'guest', selector: '[data-tour="auth-card"]', title: 'Creating your account', body: 'Choose Sign Up, pick "Student", choose your grade (K to 12), connect Google, and confirm your details. No password to remember.' },
+      { view: 'join', role: 'studentNew', selector: '[data-tour="code-card"]', title: 'Enter your access code', body: "After signing up you will see this page. There is no dashboard until you enter the code from your facilitator. The code adds you to your program's roster." },
+      { view: 'student', role: 'studentJoined', selector: '.tabs-header', title: 'Your dashboard', body: 'Once you are on a roster you can check which equipment is ready, read manuals, and submit your own projects for approval.' },
+      { view: 'public', role: 'studentJoined', selector: '[data-tour="public-profile"]', title: 'The public directory', body: 'Anyone can browse programs here. A program only shows its technology and projects if the facilitator makes them public.' },
+      { view: 'landing', role: 'studentJoined', selector: null, title: "You've finished the student tour", body: 'Press Done to go back to the role list. This tour will be marked complete.' }
+    ]
   },
-  {
-    section: FAC,
-    view: 'facilitator',
-    role: 'facilitatorApproved',
-    selector: '[data-tour="access-code"]',
-    title: 'Student access code',
-    body: 'Share this code with your students. Copy it, project it as a QR code, or regenerate it at any time.'
-  },
-  {
-    section: FAC,
-    view: 'facilitator',
-    role: 'facilitatorApproved',
-    selector: '.tabs-header',
-    title: 'Technology, projects and details',
-    body: 'Catalog equipment, review student project submissions, and edit your program profile. Program Details also controls what the public can see.'
-  },
-  {
-    section: FAC,
-    view: 'program-create',
-    role: 'facilitatorApproved',
-    selector: 'form',
-    title: 'Creating a program',
-    body: 'New programs start as drafts. You choose here whether your technology inventory and student projects are public. Both are private by default.'
-  },
-  {
-    section: MGR,
-    view: 'manager',
-    role: 'manager',
-    selector: '.tabs-header',
-    title: 'Site manager portal',
-    body: 'Managers switch between facilitator account approvals and program sign-offs using these tabs.'
-  },
-  {
-    section: MGR,
-    view: 'manager',
-    role: 'manager',
-    selector: '.main-content .card',
-    title: 'Approval queue',
-    body: 'New facilitators and draft programs wait here. Approving an account unlocks program creation, and publishing a program lists it in the directory.'
-  },
-  {
-    section: MGR,
-    view: 'manager',
-    role: 'manager',
-    selector: null,
-    title: "That's the tour!",
-    body: 'Explore however you like. The Feedback Mode button in the corner lets you restart this tour anytime.'
+  admin: {
+    label: 'Website admin tour',
+    steps: [
+      { view: 'manager', role: 'manager', selector: null, title: 'Website admin walkthrough', body: 'This tour follows what a website admin sees: approving facilitators and publishing programs. Use Next to continue, or Skip to return to the role list.' },
+      { view: 'manager', role: 'manager', selector: '.tabs-header', title: 'Two approval queues', body: 'One tab handles facilitator accounts and the other handles program sign-offs. The counts show what is waiting.' },
+      { view: 'manager', role: 'manager', click: '.tabs-header .tab-btn:nth-child(1)', selector: '.main-content .card', title: 'Facilitator accounts', body: 'New facilitators wait here. Approving an account unlocks program creation and student access codes.' },
+      { view: 'manager', role: 'manager', click: '.tabs-header .tab-btn:nth-child(2)', selector: '.main-content .card', title: 'Program sign-offs', body: 'Review each draft program, then publish it so it appears in the public directory.' },
+      { view: 'manager', role: 'manager', selector: null, title: "You've finished the admin tour", body: 'Press Done to go back to the role list. This tour will be marked complete.' }
+    ]
   }
-];
+};
 
 const PAD = 8;       // spotlight padding around the target
 const GAP = 14;      // distance between spotlight and tooltip
@@ -80,7 +53,9 @@ const MARGIN = 12;   // viewport margin
 
 const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
 
-export default function FeedbackTour({ currentView, setCurrentView, onSelectRole, onClose }) {
+export default function FeedbackTour({ role, currentView, setCurrentView, onSelectRole, onClose }) {
+  const tour = TOURS[role] || TOURS.facilitator;
+  const STEPS = tour.steps;
   const [index, setIndex] = useState(0);
   const [rect, setRect] = useState(null);
   const [ready, setReady] = useState(false);
@@ -116,8 +91,18 @@ export default function FeedbackTour({ currentView, setCurrentView, onSelectRole
     const needsViewChange = step.view !== viewRef.current;
     if (needsViewChange) setCurrentView(step.view);
 
+    let clicked = false;
     const locate = () => {
       if (cancelled) return;
+      if (step.click && !clicked) {
+        const trigger = document.querySelector(step.click);
+        if (trigger) {
+          clicked = true;
+          trigger.click();
+          timer = setTimeout(locate, 150);
+          return;
+        }
+      }
       if (!step.selector) {
         setRect(null);
         setReady(true);
@@ -166,7 +151,7 @@ export default function FeedbackTour({ currentView, setCurrentView, onSelectRole
   }, [index, ready, vp.w]);
 
   const next = useCallback(() => {
-    if (isLast) onClose();
+    if (isLast) onClose({ completed: true });
     else setIndex(i => i + 1);
   }, [isLast, onClose]);
 
@@ -174,7 +159,7 @@ export default function FeedbackTour({ currentView, setCurrentView, onSelectRole
 
   useEffect(() => {
     const onKey = (e) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') onClose({ completed: false });
       else if (e.key === 'ArrowRight') next();
       else if (e.key === 'ArrowLeft') back();
     };
@@ -279,7 +264,7 @@ export default function FeedbackTour({ currentView, setCurrentView, onSelectRole
 
         <div style={{ position: 'relative' }}>
           <div style={{ fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-primary)', marginBottom: '0.25rem' }}>
-            {step.section} · Step {index + 1} of {STEPS.length}
+            {tour.label} · Step {index + 1} of {STEPS.length}
           </div>
           <h3 style={{ fontSize: '1.05rem', marginBottom: '0.35rem' }}>{step.title}</h3>
           <p style={{ fontSize: '0.86rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>{step.body}</p>
@@ -306,10 +291,10 @@ export default function FeedbackTour({ currentView, setCurrentView, onSelectRole
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
             <button
               type="button"
-              onClick={onClose}
+              onClick={() => onClose({ completed: false })}
               style={{ fontSize: '0.8rem', color: 'var(--text-muted)', padding: '0.3rem 0.2rem' }}
             >
-              {isLast ? 'Close' : 'Skip tour'}
+              Skip tour
             </button>
             <div style={{ display: 'flex', gap: '0.4rem' }}>
               {!isFirst && (
@@ -318,7 +303,7 @@ export default function FeedbackTour({ currentView, setCurrentView, onSelectRole
                 </button>
               )}
               <button type="button" className="btn btn-primary btn-sm" onClick={next}>
-                {isFirst ? 'Start tour' : isLast ? 'Finish' : 'Next'}
+                {isFirst ? 'Start tour' : isLast ? 'Done' : 'Next'}
               </button>
             </div>
           </div>
@@ -328,8 +313,8 @@ export default function FeedbackTour({ currentView, setCurrentView, onSelectRole
   );
 }
 
-/* Small floating control shown in feedback mode once the tour is closed */
-export function FeedbackPill({ onRestart, onSwitchMode }) {
+/* Small floating control shown in feedback mode outside of a tour */
+export function FeedbackPill({ onTours, onExit }) {
   return (
     <div
       style={{
@@ -350,10 +335,10 @@ export function FeedbackPill({ onRestart, onSwitchMode }) {
       <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-primary)', padding: '0 0.5rem' }}>
         <i className='bx bx-message-square-detail' style={{ marginRight: 4 }}></i>Feedback Mode
       </span>
-      <button type="button" className="btn btn-secondary btn-sm" style={{ borderRadius: 'var(--radius-full)' }} onClick={onRestart}>
-        Restart tour
+      <button type="button" className="btn btn-secondary btn-sm" style={{ borderRadius: 'var(--radius-full)' }} onClick={onTours}>
+        Walkthroughs
       </button>
-      <button type="button" className="btn btn-secondary btn-sm" style={{ borderRadius: 'var(--radius-full)' }} onClick={onSwitchMode}>
+      <button type="button" className="btn btn-secondary btn-sm" style={{ borderRadius: 'var(--radius-full)' }} onClick={onExit}>
         Exit
       </button>
     </div>

@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 
-export default function ProjectDetailModal({ 
-  project, 
-  isOpen, 
-  onClose, 
-  isFacilitator, 
-  onApprove, 
-  onReject 
+export default function ProjectDetailModal({
+  project,
+  isOpen,
+  onClose,
+  isFacilitator,
+  onApprove,
+  onReject,
+  periods = [],
+  onSetPeriods
 }) {
   const [rejectReason, setRejectReason] = useState('');
   const [showRejectInput, setShowRejectInput] = useState(false);
@@ -94,6 +96,39 @@ export default function ProjectDetailModal({
             )}
           </div>
 
+          {/* Class Period Tags (facilitator only) */}
+          {isFacilitator && (
+            <div className="card" style={{ padding: '0.85rem', marginTop: '1.25rem' }}>
+              <div style={{ fontWeight: 600, fontSize: '0.85rem', marginBottom: '0.15rem' }}>Class Period Tags</div>
+              <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '0.6rem' }}>
+                Tag this project with one or more periods. Tags are only visible to you.
+              </p>
+              {periods.length > 0 ? (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                  {periods.map(per => {
+                    const ids = project.periodIds || [];
+                    const on = ids.includes(per.id);
+                    return (
+                      <button
+                        key={per.id}
+                        type="button"
+                        className={`chip ${on ? 'active' : ''}`}
+                        onClick={() => onSetPeriods?.(project.id, on ? ids.filter(x => x !== per.id) : [...ids, per.id])}
+                      >
+                        {on && <i className='bx bx-check'></i>}
+                        {per.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                  No class periods yet. Add them in the Roster tab.
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Facilitator Review Actions */}
           {isFacilitator && project.status === 'draft' && (
             <div style={{ marginTop: '1.25rem', padding: '1rem', background: 'var(--bg-subtle)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
@@ -111,8 +146,8 @@ export default function ProjectDetailModal({
                     <button type="button" className="btn btn-secondary btn-sm" onClick={() => setShowRejectInput(false)}>
                       Cancel
                     </button>
-                    <button 
-                      type="button" 
+                    <button
+                      type="button"
                       className="btn btn-danger btn-sm"
                       onClick={() => {
                         onReject(project.id, rejectReason);
@@ -125,8 +160,8 @@ export default function ProjectDetailModal({
                 </div>
               ) : (
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  <button 
-                    type="button" 
+                  <button
+                    type="button"
                     className="btn btn-success btn-sm"
                     onClick={() => {
                       onApprove(project.id);
@@ -135,8 +170,8 @@ export default function ProjectDetailModal({
                   >
                     <i className='bx bx-check'></i> Approve & Publish
                   </button>
-                  <button 
-                    type="button" 
+                  <button
+                    type="button"
                     className="btn btn-secondary btn-sm"
                     onClick={() => setShowRejectInput(true)}
                   >
