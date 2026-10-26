@@ -312,35 +312,3 @@ export default function FeedbackTour({ role, currentView, setCurrentView, onSele
     </>
   );
 }
-
-/* Small floating control shown in feedback mode outside of a tour */
-export function FeedbackPill({ onTours, onExit }) {
-  return (
-    <div
-      style={{
-        position: 'fixed',
-        right: 16,
-        bottom: 16,
-        zIndex: 120,
-        display: 'flex',
-        alignItems: 'center',
-        gap: '0.25rem',
-        padding: '0.3rem',
-        background: 'var(--bg-surface)',
-        border: '1px solid var(--border-strong)',
-        borderRadius: 'var(--radius-full)',
-        boxShadow: 'var(--shadow-lg)'
-      }}
-    >
-      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-primary)', padding: '0 0.5rem' }}>
-        <i className='bx bx-message-square-detail' style={{ marginRight: 4 }}></i>Feedback Mode
-      </span>
-      <button type="button" className="btn btn-secondary btn-sm" style={{ borderRadius: 'var(--radius-full)' }} onClick={onTours}>
-        Walkthroughs
-      </button>
-      <button type="button" className="btn btn-secondary btn-sm" style={{ borderRadius: 'var(--radius-full)' }} onClick={onExit}>
-        Exit
-      </button>
-    </div>
-  );
-}

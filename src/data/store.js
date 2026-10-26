@@ -684,6 +684,74 @@ class EquipStore {
     this.notify();
   }
 
+  // --- Test helpers (used by the Test Tools panel only) ---
+  addSampleData(programId) {
+    const result = this.mutateProgram(programId, p => {
+      if (p.sampleDataAdded) return fail('Sample data was already added.');
+
+      const today = new Date().toISOString().split('T')[0];
+      const now = new Date().toISOString();
+
+      if (!(p.periods || []).length) {
+        p.periods = [
+          { id: 'per-sample-1', name: 'Period 1' },
+          { id: 'per-sample-2', name: 'Period 3' }
+        ];
+      }
+      const [pa, pb = pa] = p.periods;
+
+      p.technologies = [
+        { id: 'sample-tech-1', name: 'Prusa MK4 3D Printer', category: '3D Printing & Fabrication', status: 'working', assetNumber: '3DP-01', photo: 'https://images.unsplash.com/photo-1631541909061-71e349d1f203?w=800&auto=format&fit=crop&q=80', note: 'PLA filament is on the left shelf.', hasSensitiveData: false, dataLocation: 'None', manualUrl: '', dateAdded: today, lastChecked: today },
+        { id: 'sample-tech-2', name: 'Mirrorless Camera Kit', category: 'Media Production', status: 'working', assetNumber: 'CAM-02', photo: 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=800&auto=format&fit=crop&q=80', note: 'Active documentary footage is on the card. Do not format.', hasSensitiveData: true, dataLocation: 'SD Card Slot 1: /DCIM/100MEDIA', manualUrl: '', dateAdded: today, lastChecked: today },
+        { id: 'sample-tech-3', name: 'VR Workstation', category: 'Computing & VR', status: 'needs-repairs', assetNumber: 'VR-01', photo: 'https://images.unsplash.com/photo-1587202372775-e229f172b9d7?w=800&auto=format&fit=crop&q=80', note: 'GPU fan is loud. Reported to the facilitator.', hasSensitiveData: true, dataLocation: 'D:\\EAST_VR_Lab\\', manualUrl: '', dateAdded: today, lastChecked: today },
+        { id: 'sample-tech-4', name: 'Embroidery Machine', category: 'Textiles & Soft Goods', status: 'maintenance', assetNumber: 'EMB-01', photo: 'https://images.unsplash.com/photo-1605289982774-9a6fef564df8?w=800&auto=format&fit=crop&q=80', note: '', hasSensitiveData: false, dataLocation: 'None', manualUrl: '', dateAdded: today, lastChecked: today },
+        ...(p.technologies || [])
+      ];
+
+      p.roster = [
+        ...(p.roster || []),
+        { studentId: 'sample-stud-1', name: 'Maria Lopez', email: 'maria.lopez@example.org', grade: '11th Grade', joinedAt: now, periodId: pa.id },
+        { studentId: 'sample-stud-2', name: 'Devon Carter', email: 'devon.carter@example.org', grade: '10th Grade', joinedAt: now, periodId: pa.id },
+        { studentId: 'sample-stud-3', name: 'Priya Shah', email: 'priya.shah@example.org', grade: '12th Grade', joinedAt: now, periodId: pb.id }
+      ];
+
+      const member = (name, role, grade) => ({ name, role, grade });
+      p.projects = [
+        {
+          id: 'sample-proj-1', name: 'Trail Accessibility Map', status: 'approved', submittedBy: 'Maria Lopez',
+          submissionDate: today, approvedDate: today, category: 'GIS & Community Service', periodIds: [pa.id],
+          description: 'Mapping surface type and slope on local walking trails so residents with mobility needs can plan visits.',
+          photos: ['https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=800&auto=format&fit=crop&q=80'],
+          teamMembers: [member('Maria Lopez', 'Team Lead', '11th'), member('Devon Carter', 'Field Surveyor', '10th')],
+          pastProjectHandlers: [], externalLinks: [],
+          communicationLogs: [{ date: today, author: 'Maria Lopez', contactPerson: 'Parks Department', type: 'Meeting', notes: 'Confirmed which trails to survey first.' }]
+        },
+        {
+          id: 'sample-proj-2', name: 'Storm Shelter Locator App', status: 'approved', submittedBy: 'Priya Shah',
+          submissionDate: today, approvedDate: today, category: 'Software & Virtual Reality', periodIds: [pa.id, pb.id],
+          description: 'A simple mobile-friendly page that shows the nearest community storm shelter and its capacity.',
+          photos: ['https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=800&auto=format&fit=crop&q=80'],
+          teamMembers: [member('Priya Shah', 'Developer', '12th'), member('Devon Carter', 'Tester', '10th')],
+          pastProjectHandlers: ['Alumni team (Class of last year, initial data collection)'], externalLinks: [],
+          communicationLogs: [{ date: today, author: 'Priya Shah', contactPerson: 'County Emergency Office', type: 'Email', notes: 'Received the official shelter list.' }]
+        },
+        {
+          id: 'sample-proj-3', name: 'Library Oral History Archive', status: 'draft', submittedBy: 'Devon Carter',
+          submissionDate: today, approvedDate: null, category: 'Media & Storytelling', periodIds: [pb.id],
+          description: 'Recording and cataloging interviews with longtime residents for the public library.',
+          photos: ['https://images.unsplash.com/photo-1585320806297-9794b3e4eeae?w=800&auto=format&fit=crop&q=80'],
+          teamMembers: [member('Devon Carter', 'Team Lead', '10th')],
+          pastProjectHandlers: [], externalLinks: [], communicationLogs: []
+        },
+        ...(p.projects || [])
+      ];
+
+      p.sampleDataAdded = true;
+      return { success: true };
+    });
+    return result || fail('Program not found.');
+  }
+
   // --- Full Demo Reset ---
   resetToDefault() {
     localStorage.setItem(STORAGE_KEYS.PROGRAMS, JSON.stringify(INITIAL_PROGRAMS));

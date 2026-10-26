@@ -1,267 +1,199 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { equipStore } from '../data/store';
-import { DEMO_USERS } from '../data/mockData';
+import React, { useState, useEffect, useRef } from 'react';
 
-export default function Navbar({ 
-  currentView, 
-  setCurrentView, 
-  currentUser, 
-  onOpenAuth,
-  onOpenSettings 
-}) {
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [userDropdownOpen, setUserDropdownOpen] = useState(false);
-  const dropdownRef = useRef(null);
+const ROLE_LABEL = { student: 'Student', facilitator: 'Facilitator', manager: 'Website Admin' };
 
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    function handleClickOutside(event) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setUserDropdownOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+// Only what the signed-in person's role would really see
+function getLinks(user) {
+  const links = [];
+  if (user.role === 'student') {
+    links.push(
+      user.programId
+        ? { view: 'student', label: 'My Dashboard', icon: 'bx-grid-alt', match: ['student'] }
+        : { view: 'join', label: 'Enter Access Code', icon: 'bx-key', match: ['join'] }
+    );
+  }
+  if (user.role === 'facilitator') {
+    links.push({ view: 'facilitator', label: 'My Program', icon: 'bx-chalkboard', match: ['facilitator', 'program-create'] });
+  }
+  if (user.role === 'manager') {
+    links.push({ view: 'manager', label: 'Admin Portal', icon: 'bx-shield-quarter', match: ['manager'] });
+  }
+  links.push({ view: 'public', label: 'Public Directory', icon: 'bx-globe', match: ['public'] });
+  links.push({ view: 'about', label: 'About', icon: 'bx-info-circle', match: ['about'] });
+  return links;
+}
 
-  const handleRoleSelect = (roleKey) => {
-    equipStore.switchRole(roleKey);
-    setUserDropdownOpen(false);
-    setMobileMenuOpen(false);
-    if (roleKey === 'facilitatorApproved' || roleKey === 'facilitatorPending') {
-      setCurrentView('facilitator');
-    } else if (roleKey === 'studentJoined') {
-      setCurrentView('student');
-    } else if (roleKey === 'studentNew') {
-      setCurrentView('join');
-    } else if (roleKey === 'manager') {
-      setCurrentView('manager');
-    }
+// Open/close with an exit animation
+function usePopover() {
+  const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const timer = useRef(null);
+  const ref = useRef(null);
+
+  const close = () => {
+    setOpen(false);
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => setMounted(false), 130);
+  };
+  const show = () => {
+    clearTimeout(timer.current);
+    setMounted(true);
+    setOpen(true);
   };
 
-  const navItems = [
-    { id: 'landing', label: 'Overview', icon: 'bx-home-alt' },
-    { id: 'facilitator', label: 'Facilitator Hub', icon: 'bx-chalkboard' },
-    { id: 'student', label: 'Student Space', icon: 'bx-folder' },
-    { id: 'join', label: 'Access Code', icon: 'bx-key' },
-    { id: 'public', label: 'Directory', icon: 'bx-globe' },
-    { id: 'manager', label: 'Admin', icon: 'bx-shield-quarter' }
-  ];
+  useEffect(() => {
+    if (!open) return undefined;
+    const onDown = (e) => { if (ref.current && !ref.current.contains(e.target)) close(); };
+    const onKey = (e) => { if (e.key === 'Escape') close(); };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  useEffect(() => () => clearTimeout(timer.current), []);
+
+  return { open, mounted, ref, toggle: () => (open ? close() : show()), close };
+}
+
+export default function Navbar({ currentView, setCurrentView, currentUser, onOpenAuth, onOpenSettings, onSignOut }) {
+  const signedIn = currentUser && currentUser.role !== 'guest';
+  const links = getLinks(currentUser || { role: 'guest' });
+  const account = usePopover();
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  const go = (view) => {
+    setDrawerOpen(false);
+    setCurrentView(view);
+  };
+
+  const isActive = (l) => l.match.includes(currentView);
 
   return (
     <header className="navbar-header">
-      <div className="container">
-        <div className="navbar-inner">
-          {/* Brand */}
-          <div 
-            className="brand-wrapper" 
-            onClick={() => setCurrentView('landing')}
-          >
-            <div className="brand-logo-mark">
-              <i className='bx bx-layer'></i>
-            </div>
-            <span className="brand-name">EQUIP</span>
-            <span className="brand-tag-east">EAST</span>
-          </div>
+      <div className="container navbar-inner">
+        {/* Brand */}
+        <div className="brand-wrapper" onClick={() => go('landing')} role="link" tabIndex={0}
+          onKeyDown={(e) => { if (e.key === 'Enter') go('landing'); }}>
+          <div className="brand-logo-mark"><i className='bx bx-microchip'></i></div>
+          <span className="brand-name">EQUIP</span>
+        </div>
 
-          {/* Desktop Nav Items */}
-          <nav className="desktop-nav-items" style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-            {navItems.map(item => {
-              const isActive = currentView === item.id;
-              return (
-                <button
-                  key={item.id}
-                  className={`nav-item-btn ${isActive ? 'active' : ''}`}
-                  onClick={() => setCurrentView(item.id)}
-                >
-                  <i className={`bx ${item.icon}`} style={{ fontSize: '1.1rem' }}></i>
-                  <span>{item.label}</span>
-                </button>
-              );
-            })}
-          </nav>
-
-          {/* Right Controls: Settings + User Menu */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            {/* Preferences / Customization Button */}
-            <button 
-              className="btn btn-secondary btn-icon"
-              onClick={onOpenSettings}
-              title="Preferences & Customization"
-              aria-label="Settings"
+        {/* Desktop links */}
+        <nav className="nav-desktop-only" aria-label="Main">
+          {links.map(l => (
+            <button
+              key={l.view}
+              type="button"
+              className={`nav-item-btn ${isActive(l) ? 'active' : ''}`}
+              onClick={() => go(l.view)}
+              aria-current={isActive(l) ? 'page' : undefined}
             >
-              <i className='bx bx-cog' style={{ fontSize: '1.25rem' }}></i>
+              <i className={`bx ${l.icon}`}></i>
+              <span>{l.label}</span>
             </button>
+          ))}
+        </nav>
 
-            {/* User Dropdown */}
-            <div style={{ position: 'relative' }} ref={dropdownRef}>
+        {/* Right side */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+          <button type="button" className="btn btn-secondary btn-icon" onClick={onOpenSettings} aria-label="Preferences" title="Preferences">
+            <i className='bx bx-cog' style={{ fontSize: '1.15rem' }}></i>
+          </button>
+
+          {!signedIn && (
+            <button type="button" className="btn btn-primary" onClick={onOpenAuth}>
+              <i className='bx bx-log-in'></i>
+              <span>Log In</span>
+            </button>
+          )}
+
+          {signedIn && (
+            <div ref={account.ref} style={{ position: 'relative' }}>
               <button
-                className="btn btn-secondary"
-                onClick={() => setUserDropdownOpen(!userDropdownOpen)}
-                style={{
-                  padding: '0.35rem 0.65rem',
-                  gap: '0.5rem',
-                  fontSize: '0.85rem'
-                }}
+                type="button"
+                onClick={account.toggle}
+                aria-haspopup="menu"
+                aria-expanded={account.open}
+                className="nav-item-btn"
+                style={{ padding: '0.25rem 0.5rem 0.25rem 0.3rem', gap: '0.5rem' }}
               >
-                <img 
-                  src={currentUser.avatar} 
-                  alt={currentUser.name} 
-                  style={{ width: '22px', height: '22px', borderRadius: '50%', objectFit: 'cover' }}
+                <img
+                  src={currentUser.avatar}
+                  alt=""
+                  style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover' }}
                 />
-                <span style={{ fontWeight: 600 }}>{currentUser.name.split(' ')[0]}</span>
-                <i className={`bx ${userDropdownOpen ? 'bx-chevron-up' : 'bx-chevron-down'}`}></i>
+                <span className="nav-desktop-only" style={{ fontWeight: 600 }}>{currentUser.name?.split(' ')[0]}</span>
+                <i className={`bx bx-chevron-down dropdown-caret ${account.open ? 'is-open' : ''}`}></i>
               </button>
 
-              {userDropdownOpen && (
-                <div 
-                  className="card"
-                  style={{
-                    position: 'absolute',
-                    top: 'calc(100% + 6px)',
-                    right: 0,
-                    width: '240px',
-                    padding: '0.5rem',
-                    zIndex: 200,
-                    boxShadow: 'var(--shadow-lg)'
-                  }}
-                >
-                  <div style={{ padding: '0.5rem 0.65rem', borderBottom: '1px solid var(--border-subtle)', marginBottom: '0.35rem' }}>
-                    <div style={{ fontWeight: 700, fontSize: '0.85rem' }}>{currentUser.name}</div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{currentUser.email}</div>
+              {account.mounted && (
+                <div className="nav-popover" role="menu" data-state={account.open ? 'open' : 'closed'}>
+                  <div style={{ padding: '0.6rem 0.75rem 0.7rem', borderBottom: '1px solid var(--border-subtle)', marginBottom: '0.25rem' }}>
+                    <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{currentUser.name}</div>
+                    <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)', wordBreak: 'break-all' }}>{currentUser.email}</div>
+                    <span className="status-badge badge-draft" style={{ marginTop: '0.4rem' }}>
+                      {ROLE_LABEL[currentUser.role] || currentUser.role}
+                    </span>
                   </div>
-
-                  <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', padding: '0.25rem 0.65rem' }}>
-                    Switch Account Role
-                  </div>
-
-                  <button 
-                    className="btn btn-secondary btn-sm"
-                    style={{ width: '100%', justifyContent: 'flex-start', border: 'none', background: 'transparent' }}
-                    onClick={() => handleRoleSelect('facilitatorApproved')}
-                  >
-                    <i className='bx bx-check-circle'></i> Facilitator (Approved)
+                  <button type="button" role="menuitem" className="dropdown-item" onClick={() => { account.close(); onOpenSettings(); }}>
+                    <span><i className='bx bx-cog' style={{ marginRight: '0.5rem' }}></i>Preferences</span>
                   </button>
-
-                  <button 
-                    className="btn btn-secondary btn-sm"
-                    style={{ width: '100%', justifyContent: 'flex-start', border: 'none', background: 'transparent' }}
-                    onClick={() => handleRoleSelect('facilitatorPending')}
-                  >
-                    <i className='bx bx-time'></i> Facilitator (Pending)
+                  <button type="button" role="menuitem" className="dropdown-item" onClick={() => { account.close(); onSignOut(); }}>
+                    <span><i className='bx bx-log-out' style={{ marginRight: '0.5rem' }}></i>Sign out</span>
                   </button>
-
-                  <button 
-                    className="btn btn-secondary btn-sm"
-                    style={{ width: '100%', justifyContent: 'flex-start', border: 'none', background: 'transparent' }}
-                    onClick={() => handleRoleSelect('studentJoined')}
-                  >
-                    <i className='bx bx-user'></i> Student (Enrolled)
-                  </button>
-
-                  <button 
-                    className="btn btn-secondary btn-sm"
-                    style={{ width: '100%', justifyContent: 'flex-start', border: 'none', background: 'transparent' }}
-                    onClick={() => handleRoleSelect('studentNew')}
-                  >
-                    <i className='bx bx-key'></i> Student (New - Code)
-                  </button>
-
-                  <button 
-                    className="btn btn-secondary btn-sm"
-                    style={{ width: '100%', justifyContent: 'flex-start', border: 'none', background: 'transparent' }}
-                    onClick={() => handleRoleSelect('manager')}
-                  >
-                    <i className='bx bx-shield-quarter'></i> Website Manager
-                  </button>
-
-                  <div style={{ borderTop: '1px solid var(--border-subtle)', marginTop: '0.35rem', paddingTop: '0.35rem' }}>
-                    <button 
-                      className="btn btn-secondary btn-sm"
-                      style={{ width: '100%', justifyContent: 'flex-start', border: 'none', background: 'transparent' }}
-                      onClick={() => { setUserDropdownOpen(false); onOpenAuth(); }}
-                    >
-                      <i className='bx bx-info-circle'></i> Google OAuth Info
-                    </button>
-                  </div>
                 </div>
               )}
             </div>
+          )}
 
-            {/* Mobile Toggle */}
-            <button 
-              className="btn btn-secondary btn-icon mobile-menu-toggle"
-              onClick={() => setMobileMenuOpen(true)}
-              style={{ display: 'none' }}
-              aria-label="Open menu"
-            >
-              <i className='bx bx-menu' style={{ fontSize: '1.25rem' }}></i>
-            </button>
-          </div>
+          {/* Mobile menu button */}
+          <button type="button" className="btn btn-secondary btn-icon nav-mobile-only" onClick={() => setDrawerOpen(true)} aria-label="Open menu">
+            <i className='bx bx-menu' style={{ fontSize: '1.3rem' }}></i>
+          </button>
         </div>
       </div>
 
-      {/* Mobile Drawer */}
-      {mobileMenuOpen && (
+      {/* Mobile drawer */}
+      {drawerOpen && (
         <div className="mobile-drawer">
-          <div className="mobile-drawer-backdrop" onClick={() => setMobileMenuOpen(false)} />
+          <div className="mobile-drawer-backdrop" onClick={() => setDrawerOpen(false)}></div>
           <div className="mobile-drawer-content">
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
-              <div className="brand-wrapper" onClick={() => { setCurrentView('landing'); setMobileMenuOpen(false); }}>
-                <div className="brand-logo-mark">
-                  <i className='bx bx-layer'></i>
-                </div>
-                <span className="brand-name">EQUIP</span>
-              </div>
-              <button className="btn btn-secondary btn-icon" onClick={() => setMobileMenuOpen(false)}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <span className="brand-name">EQUIP</span>
+              <button type="button" className="btn btn-secondary btn-icon" onClick={() => setDrawerOpen(false)} aria-label="Close menu">
                 <i className='bx bx-x' style={{ fontSize: '1.25rem' }}></i>
               </button>
             </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', flex: 1 }}>
-              {navItems.map(item => {
-                const isActive = currentView === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    className={`nav-item-btn ${isActive ? 'active' : ''}`}
-                    style={{ padding: '0.65rem 0.85rem' }}
-                    onClick={() => {
-                      setCurrentView(item.id);
-                      setMobileMenuOpen(false);
-                    }}
-                  >
-                    <i className={`bx ${item.icon}`} style={{ fontSize: '1.15rem' }}></i>
-                    <span>{item.label}</span>
-                  </button>
-                );
-              })}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+              {links.map(l => (
+                <button
+                  key={l.view}
+                  type="button"
+                  className={`nav-item-btn ${isActive(l) ? 'active' : ''}`}
+                  style={{ justifyContent: 'flex-start', padding: '0.65rem 0.75rem' }}
+                  onClick={() => go(l.view)}
+                >
+                  <i className={`bx ${l.icon}`}></i>
+                  <span>{l.label}</span>
+                </button>
+              ))}
             </div>
-
-            <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '0.75rem', marginTop: '0.75rem' }}>
-              <button 
-                className="btn btn-secondary btn-sm"
-                style={{ width: '100%', marginBottom: '0.5rem', justifyContent: 'flex-start' }}
-                onClick={() => { setMobileMenuOpen(false); onOpenSettings(); }}
-              >
-                <i className='bx bx-cog'></i>
-                <span>Preferences & Layout</span>
+            {!signedIn && (
+              <button type="button" className="btn btn-primary" style={{ marginTop: '1rem' }} onClick={() => { setDrawerOpen(false); onOpenAuth(); }}>
+                <i className='bx bx-log-in'></i><span>Log In</span>
               </button>
-            </div>
+            )}
+            {signedIn && (
+              <button type="button" className="btn btn-secondary" style={{ marginTop: '1rem' }} onClick={() => { setDrawerOpen(false); onSignOut(); }}>
+                <i className='bx bx-log-out'></i><span>Sign out</span>
+              </button>
+            )}
           </div>
         </div>
       )}
-
-      <style>{`
-        @media (max-width: 820px) {
-          .desktop-nav-items {
-            display: none !important;
-          }
-          .mobile-menu-toggle {
-            display: inline-flex !important;
-          }
-        }
-      `}</style>
     </header>
   );
 }

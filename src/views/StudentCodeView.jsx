@@ -6,8 +6,6 @@ export default function StudentCodeView({ currentUser, setCurrentView }) {
   const [error, setError] = useState('');
   const [matchedProgram, setMatchedProgram] = useState(null);
 
-  const programs = equipStore.getPrograms();
-
   const handleCodeChange = (e) => {
     let val = e.target.value.toUpperCase();
     setCode(val);
@@ -38,15 +36,6 @@ export default function StudentCodeView({ currentUser, setCurrentView }) {
       setCurrentView('student');
     } else {
       setError(result.message || 'Program not found. Please double-check your code.');
-    }
-  };
-
-  const handleQuickFill = (sampleCode) => {
-    setCode(sampleCode);
-    const match = equipStore.getProgramByCode(sampleCode);
-    if (match) {
-      setMatchedProgram(match);
-      setError('');
     }
   };
 
@@ -122,25 +111,6 @@ export default function StudentCodeView({ currentUser, setCurrentView }) {
             <i className='bx bx-right-arrow-alt'></i>
           </button>
         </form>
-
-        <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '1.25rem' }}>
-          <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
-            Sample Codes for Testing:
-          </div>
-          <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'center', flexWrap: 'wrap' }}>
-            {programs.map(p => (
-              <button
-                key={p.id}
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={() => handleQuickFill(p.code)}
-                style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}
-              >
-                {p.code}
-              </button>
-            ))}
-          </div>
-        </div>
       </div>
     </div>
   );

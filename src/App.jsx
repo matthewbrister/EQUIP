@@ -12,7 +12,8 @@ import AuthView from './views/AuthView';
 import AboutView from './views/AboutView';
 import SettingsModal from './components/Modals/SettingsModal';
 import EntryGate from './components/EntryGate';
-import FeedbackTour, { FeedbackPill } from './components/FeedbackTour';
+import FeedbackTour from './components/FeedbackTour';
+import TestPanel from './components/TestPanel';
 import FeedbackRolePicker from './components/FeedbackRolePicker';
 import { equipStore } from './data/store';
 import { DEMO_USERS } from './data/mockData';
@@ -205,7 +206,6 @@ export default function App() {
             currentUser={currentUser}
             preset={authPreset}
             onAuthSuccess={handleAuthSuccess}
-            onSelectRole={handleSelectRole}
             onSignOut={handleSignOut}
           />
         );
@@ -270,6 +270,7 @@ export default function App() {
         currentUser={currentUser}
         onOpenAuth={openAuth}
         onOpenSettings={() => setIsSettingsModalOpen(true)}
+        onSignOut={handleSignOut}
       />
 
       <main className={`main-content page-${viewPhase}`}>
@@ -294,8 +295,15 @@ export default function App() {
         />
       )}
 
-      {entryMode === 'feedback' && !tourActive && (
-        <FeedbackPill onTours={() => setPickerOpen(true)} onExit={resetMode} />
+      {!tourActive && (
+        <TestPanel
+          mode={entryMode}
+          currentUser={currentUser}
+          navigate={navigate}
+          onSelectRole={handleSelectRole}
+          onTours={() => setPickerOpen(true)}
+          onExit={resetMode}
+        />
       )}
     </div>
   );

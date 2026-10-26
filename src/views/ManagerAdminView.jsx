@@ -38,18 +38,6 @@ export default function ManagerAdminView({ setCurrentView, onSelectRole }) {
             Approve facilitator registrations and review draft EAST programs.
           </p>
         </div>
-
-        <button
-          className="btn btn-secondary btn-sm"
-          onClick={() => {
-            if (window.confirm("Restore sample default data?")) {
-              equipStore.resetToDefault();
-              window.location.reload();
-            }
-          }}
-        >
-          <i className='bx bx-reset'></i> Reset Database
-        </button>
       </div>
 
       {/* Tabs */}
