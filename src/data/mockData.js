@@ -17,7 +17,7 @@ export const INITIAL_PROGRAMS = [
     roster: [],
     facilitator: {
       id: "prog-vilonia-hs-fac",
-      name: "Erin Rappold",
+      name: "Facilitator TBD",
       title: "EAST Facilitator",
       email: "facilitator@example.org",
       phone: "",
@@ -48,6 +48,7 @@ export const INITIAL_PROGRAMS = [
         name: "Caden Miller",
         email: "cmiller@students.bentonvillek12.org",
         grade: "11th Grade",
+        avatar: "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=200&auto=format&fit=crop&q=80",
         joinedAt: "2026-09-02T13:00:00Z",
         periodId: "per-bw-2"
       }
@@ -393,7 +394,7 @@ export const INITIAL_PROGRAMS = [
     roster: [],
     facilitator: {
       id: "prog-vilonia-jh-fac",
-      name: "Matthew Cain",
+      name: "Facilitator TBD",
       title: "EAST Facilitator",
       email: "facilitator@example.org",
       phone: "",

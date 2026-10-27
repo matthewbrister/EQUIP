@@ -411,6 +411,7 @@ class EquipStore {
         name: studentUser.name,
         email: studentUser.email,
         grade: studentUser.grade || '',
+        avatar: studentUser.avatar || avatarFor(studentUser.name),
         joinedAt: new Date().toISOString(),
         periodId: null
       });
@@ -710,9 +711,9 @@ class EquipStore {
 
       p.roster = [
         ...(p.roster || []),
-        { studentId: 'sample-stud-1', name: 'Maria Lopez', email: 'maria.lopez@example.org', grade: '11th Grade', joinedAt: now, periodId: pa.id },
-        { studentId: 'sample-stud-2', name: 'Devon Carter', email: 'devon.carter@example.org', grade: '10th Grade', joinedAt: now, periodId: pa.id },
-        { studentId: 'sample-stud-3', name: 'Priya Shah', email: 'priya.shah@example.org', grade: '12th Grade', joinedAt: now, periodId: pb.id }
+        { studentId: 'sample-stud-1', name: 'Maria Lopez', email: 'maria.lopez@example.org', grade: '11th Grade', avatar: avatarFor('Maria Lopez'), joinedAt: now, periodId: pa.id },
+        { studentId: 'sample-stud-2', name: 'Devon Carter', email: 'devon.carter@example.org', grade: '10th Grade', avatar: avatarFor('Devon Carter'), joinedAt: now, periodId: pa.id },
+        { studentId: 'sample-stud-3', name: 'Priya Shah', email: 'priya.shah@example.org', grade: '12th Grade', avatar: avatarFor('Priya Shah'), joinedAt: now, periodId: pb.id }
       ];
 
       const member = (name, role, grade) => ({ name, role, grade });

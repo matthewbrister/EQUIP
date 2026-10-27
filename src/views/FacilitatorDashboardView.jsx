@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { equipStore } from '../data/store';
+import { equipStore, avatarFor } from '../data/store';
 import AddTechModal from '../components/Modals/AddTechModal';
 import TechDetailModal from '../components/Modals/TechDetailModal';
 import ProjectDetailModal from '../components/Modals/ProjectDetailModal';
 import QrCodeModal from '../components/Modals/QrCodeModal';
 import Dropdown from '../components/Dropdown';
+import AddPeriodModal from '../components/Modals/AddPeriodModal';
 
 export default function FacilitatorDashboardView({
   currentUser,
@@ -18,11 +19,11 @@ export default function FacilitatorDashboardView({
   const [projectSearch, setProjectSearch] = useState('');
 
   // Roster & class periods
-  const [newPeriodName, setNewPeriodName] = useState('');
+  const [periodModalOpen, setPeriodModalOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState({}); // period id (or 'unassigned') -> true when collapsed
   const [periodError, setPeriodError] = useState('');
   const [editingPeriodId, setEditingPeriodId] = useState(null);
   const [editingPeriodName, setEditingPeriodName] = useState('');
-  const [rosterFilter, setRosterFilter] = useState('all');
   const [projectPeriodFilter, setProjectPeriodFilter] = useState('all');
 
   // Modals state
@@ -172,23 +173,12 @@ export default function FacilitatorDashboardView({
   const approvedProjects = projectList.filter(p => p.status === 'approved' && matchesPeriod(p));
   const liveSelectedProject = selectedProject ? projectList.find(p => p.id === selectedProject.id) || null : null;
 
-  const rosterCount = (periodId) => roster.filter(r => (r.periodId || null) === periodId).length;
-  const visibleRoster = roster.filter(r => {
-    if (rosterFilter === 'all') return true;
-    if (rosterFilter === 'unassigned') return !r.periodId || !periodName(r.periodId);
-    return r.periodId === rosterFilter;
-  });
+  const studentsIn = (periodId) => roster.filter(r => r.periodId === periodId && periodName(periodId));
+  const unassignedStudents = roster.filter(r => !r.periodId || !periodName(r.periodId));
+  const savedAccounts = equipStore.getAccounts();
+  const avatarOf = (s) => s.avatar || savedAccounts.find(a => a.id === s.studentId)?.avatar || avatarFor(s.name);
 
-  const handleAddPeriod = (e) => {
-    e.preventDefault();
-    const res = equipStore.addPeriod(currentProgram.id, newPeriodName);
-    if (res.success) {
-      setNewPeriodName('');
-      setPeriodError('');
-    } else {
-      setPeriodError(res.message);
-    }
-  };
+  const handleAddPeriod = (name) => equipStore.addPeriod(currentProgram.id, name);
 
   const handleSaveRename = (periodId) => {
     const res = equipStore.renamePeriod(currentProgram.id, periodId, editingPeriodName);
@@ -203,7 +193,6 @@ export default function FacilitatorDashboardView({
   const handleDeletePeriod = (per) => {
     if (window.confirm(`Delete "${per.name}"? Students in it become unassigned and the tag is removed from projects.`)) {
       equipStore.deletePeriod(currentProgram.id, per.id);
-      if (rosterFilter === per.id) setRosterFilter('all');
       if (projectPeriodFilter === per.id) setProjectPeriodFilter('all');
     }
   };
@@ -213,6 +202,72 @@ export default function FacilitatorDashboardView({
       equipStore.removeStudentFromRoster(currentProgram.id, student.studentId);
     }
   };
+
+  const toggleCollapsed = (id) => setCollapsed(c => ({ ...c, [id]: !c[id] }));
+  const sectionIds = [...periods.map(p => p.id), ...(unassignedStudents.length > 0 ? ['unassigned'] : [])];
+  const allCollapsed = sectionIds.length > 0 && sectionIds.every(id => collapsed[id]);
+  const toggleAll = () => setCollapsed(Object.fromEntries(sectionIds.map(id => [id, !allCollapsed])));
+
+  // Smoothly animated collapsible body
+  const renderCollapsible = (id, children) => (
+    <div style={{ display: 'grid', gridTemplateRows: collapsed[id] ? '0fr' : '1fr', transition: 'grid-template-rows 220ms ease' }}>
+      <div
+        style={{
+          overflow: 'hidden',
+          minHeight: 0,
+          visibility: collapsed[id] ? 'hidden' : 'visible',
+          transition: collapsed[id] ? 'visibility 0s linear 220ms' : 'visibility 0s'
+        }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+
+  const renderChevron = (id) => (
+    <i
+      className='bx bx-chevron-down'
+      style={{ fontSize: '1.3rem', color: 'var(--text-muted)', transform: collapsed[id] ? 'rotate(-90deg)' : 'none', transition: 'transform 200ms ease' }}
+    ></i>
+  );
+
+  const renderStudentRow = (s) => (
+    <div
+      key={s.studentId}
+      style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.7rem 1rem', borderTop: '1px solid var(--border-subtle)', flexWrap: 'wrap' }}
+    >
+      <img
+        src={avatarOf(s)}
+        alt=""
+        onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = avatarFor(s.name); }}
+        style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
+      />
+      <div style={{ flex: 1, minWidth: '150px' }}>
+        <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{s.name}</div>
+        <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>
+          {s.email}{s.grade ? ` • ${s.grade}` : ''} • Joined {new Date(s.joinedAt).toLocaleDateString()}
+        </div>
+      </div>
+      <div style={{ width: '160px' }}>
+        <Dropdown
+          ariaLabel={`Class period for ${s.name}`}
+          value={periodName(s.periodId) ? s.periodId : ''}
+          onChange={(v) => equipStore.setStudentPeriod(currentProgram.id, s.studentId, v || null)}
+          style={{ fontSize: '0.82rem', padding: '0.4rem 0.65rem' }}
+          options={[{ value: '', label: 'Unassigned' }, ...periods.map(p => ({ value: p.id, label: p.name }))]}
+        />
+      </div>
+      <button
+        type="button"
+        className="btn btn-secondary btn-icon"
+        onClick={() => handleRemoveStudent(s)}
+        aria-label={`Remove ${s.name} from roster`}
+        title="Remove from roster"
+      >
+        <i className='bx bx-trash'></i>
+      </button>
+    </div>
+  );
 
   const renderTags = (proj) => {
     const tags = (proj.periodIds || []).map(periodName).filter(Boolean);
@@ -568,149 +623,146 @@ export default function FacilitatorDashboardView({
         </div>
       )}
 
-      {/* TAB 3: ROSTER & CLASS PERIODS */}
+      {/* TAB 3: ROSTER (students grouped by class period) */}
       {activeTab === 'roster' && (
         <div>
-          {/* Class periods */}
-          <div data-tour="roster-periods" className="card" style={{ padding: '1.25rem', marginBottom: '1.5rem' }}>
-            <h2 style={{ fontSize: '1.15rem', fontWeight: 800, marginBottom: '0.2rem' }}>Class Periods</h2>
-            <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '0.85rem' }}>
-              Create your class periods to organize students and tag projects. Only you can see them.
-            </p>
-
-            <form onSubmit={handleAddPeriod} style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.85rem' }}>
-              <input
-                type="text"
-                className="form-input"
-                style={{ flex: 1, minWidth: '180px' }}
-                placeholder="e.g. Period 3"
-                value={newPeriodName}
-                onChange={(e) => { setNewPeriodName(e.target.value); setPeriodError(''); }}
-                maxLength={40}
-              />
-              <button type="submit" className="btn btn-primary">
-                <i className='bx bx-plus'></i> Add Period
-              </button>
-            </form>
+          <div data-tour="roster-periods" className="card" style={{ padding: '1.25rem', marginBottom: '1.25rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, minWidth: '220px' }}>
+                <h2 style={{ fontSize: '1.15rem', fontWeight: 800, marginBottom: '0.2rem' }}>Roster ({roster.length})</h2>
+                <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                  Students appear here when they join with your access code. Group them by class period. Only you can see this.
+                </p>
+              </div>
+              <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                {sectionIds.length > 1 && (
+                  <button type="button" className="btn btn-secondary" onClick={toggleAll}>
+                    <i className={`bx ${allCollapsed ? 'bx-expand-vertical' : 'bx-collapse-vertical'}`}></i>
+                    {allCollapsed ? 'Expand All' : 'Collapse All'}
+                  </button>
+                )}
+                <button type="button" className="btn btn-primary" onClick={() => setPeriodModalOpen(true)}>
+                  <i className='bx bx-plus'></i> Add Period
+                </button>
+              </div>
+            </div>
 
             {periodError && (
-              <div className="alert-box alert-danger" style={{ marginBottom: '0.85rem' }}>
+              <div className="alert-box alert-danger" style={{ marginTop: '0.85rem', marginBottom: 0 }}>
                 <i className='bx bx-error-circle'></i>
                 <span>{periodError}</span>
               </div>
             )}
-
-            {periods.length > 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                {periods.map(per => (
-                  <div key={per.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', padding: '0.5rem 0.75rem', background: 'var(--bg-subtle)', borderRadius: 'var(--radius-sm)', flexWrap: 'wrap' }}>
-                    {editingPeriodId === per.id ? (
-                      <form
-                        onSubmit={(e) => { e.preventDefault(); handleSaveRename(per.id); }}
-                        style={{ display: 'flex', gap: '0.4rem', flex: 1, minWidth: '200px' }}
-                      >
-                        <input
-                          type="text"
-                          className="form-input"
-                          value={editingPeriodName}
-                          onChange={(e) => setEditingPeriodName(e.target.value)}
-                          maxLength={40}
-                          autoFocus
-                        />
-                        <button type="submit" className="btn btn-primary btn-sm">Save</button>
-                        <button type="button" className="btn btn-secondary btn-sm" onClick={() => { setEditingPeriodId(null); setPeriodError(''); }}>Cancel</button>
-                      </form>
-                    ) : (
-                      <>
-                        <div>
-                          <strong style={{ fontSize: '0.9rem' }}>{per.name}</strong>
-                          <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginLeft: '0.6rem' }}>
-                            {rosterCount(per.id)} student{rosterCount(per.id) === 1 ? '' : 's'}
-                          </span>
-                        </div>
-                        <div style={{ display: 'flex', gap: '0.35rem' }}>
-                          <button
-                            type="button"
-                            className="btn btn-secondary btn-sm"
-                            onClick={() => { setEditingPeriodId(per.id); setEditingPeriodName(per.name); setPeriodError(''); }}
-                          >
-                            <i className='bx bx-edit'></i> Rename
-                          </button>
-                          <button type="button" className="btn btn-secondary btn-sm" onClick={() => handleDeletePeriod(per)} aria-label={`Delete ${per.name}`}>
-                            <i className='bx bx-trash'></i>
-                          </button>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>No class periods yet.</p>
-            )}
           </div>
 
-          {/* Student roster */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.75rem' }}>
-            <h2 style={{ fontSize: '1.15rem', fontWeight: 800 }}>Student Roster ({roster.length})</h2>
-          </div>
-
-          {roster.length > 0 && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginBottom: '1rem' }}>
-              <button type="button" className={`chip ${rosterFilter === 'all' ? 'active' : ''}`} onClick={() => setRosterFilter('all')}>
-                All ({roster.length})
-              </button>
-              {periods.map(per => (
-                <button key={per.id} type="button" className={`chip ${rosterFilter === per.id ? 'active' : ''}`} onClick={() => setRosterFilter(per.id)}>
-                  {per.name} ({rosterCount(per.id)})
-                </button>
-              ))}
-              <button type="button" className={`chip ${rosterFilter === 'unassigned' ? 'active' : ''}`} onClick={() => setRosterFilter('unassigned')}>
-                Unassigned ({roster.filter(r => !r.periodId || !periodName(r.periodId)).length})
-              </button>
+          {roster.length === 0 && periods.length === 0 && (
+            <div className="card" style={{ padding: '1.5rem', textAlign: 'center', background: 'var(--bg-subtle)' }}>
+              <i className='bx bx-group' style={{ fontSize: '1.6rem', color: 'var(--text-muted)' }}></i>
+              <div style={{ fontWeight: 600, fontSize: '0.9rem', marginTop: '0.3rem' }}>No students on your roster yet.</div>
+              <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+                Students join by signing up and entering your access code:{' '}
+                <strong style={{ fontFamily: 'var(--font-mono)' }}>{currentProgram.code}</strong>
+              </p>
             </div>
           )}
 
-          {visibleRoster.length > 0 ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-              {visibleRoster.map(s => (
-                <div key={s.studentId} className="card" style={{ padding: '0.85rem 1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem', flexWrap: 'wrap' }}>
-                  <div style={{ flex: 1, minWidth: '200px' }}>
-                    <div style={{ fontWeight: 700, fontSize: '0.92rem' }}>{s.name}</div>
-                    <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                      {s.email}{s.grade ? ` • ${s.grade}` : ''} • Joined {new Date(s.joinedAt).toLocaleDateString()}
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <div style={{ width: '170px' }}>
-                      <Dropdown
-                        ariaLabel={`Class period for ${s.name}`}
-                        value={periodName(s.periodId) ? s.periodId : ''}
-                        onChange={(v) => equipStore.setStudentPeriod(currentProgram.id, s.studentId, v || null)}
-                        style={{ fontSize: '0.82rem', padding: '0.4rem 0.65rem' }}
-                        options={[{ value: '', label: 'Unassigned' }, ...periods.map(p => ({ value: p.id, label: p.name }))]}
+          {/* One collapsible section per class period */}
+          {periods.map(per => {
+            const members = studentsIn(per.id);
+            return (
+              <div key={per.id} className="card" style={{ marginBottom: '1rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', padding: '0.4rem 0.6rem 0.4rem 0.4rem', background: 'var(--bg-subtle)', flexWrap: 'wrap' }}>
+                  {editingPeriodId === per.id ? (
+                    <form
+                      onSubmit={(e) => { e.preventDefault(); handleSaveRename(per.id); }}
+                      style={{ display: 'flex', gap: '0.4rem', flex: 1, minWidth: '200px', padding: '0.3rem 0 0.3rem 0.4rem' }}
+                    >
+                      <input
+                        type="text"
+                        className="form-input"
+                        value={editingPeriodName}
+                        onChange={(e) => setEditingPeriodName(e.target.value)}
+                        maxLength={40}
+                        autoFocus
                       />
-                    </div>
-                    <button type="button" className="btn btn-secondary btn-sm" onClick={() => handleRemoveStudent(s)} aria-label={`Remove ${s.name}`}>
-                      <i className='bx bx-user-minus'></i>
-                    </button>
-                  </div>
+                      <button type="submit" className="btn btn-primary btn-sm">Save</button>
+                      <button type="button" className="btn btn-secondary btn-sm" onClick={() => { setEditingPeriodId(null); setPeriodError(''); }}>Cancel</button>
+                    </form>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => toggleCollapsed(per.id)}
+                        aria-expanded={!collapsed[per.id]}
+                        aria-label={`${collapsed[per.id] ? 'Expand' : 'Collapse'} ${per.name}`}
+                        style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1, minWidth: 0, textAlign: 'left', padding: '0.4rem' }}
+                      >
+                        {renderChevron(per.id)}
+                        <strong style={{ fontSize: '0.98rem' }}>{per.name}</strong>
+                        <span className="status-badge badge-draft">{members.length} student{members.length === 1 ? '' : 's'}</span>
+                      </button>
+                      <div style={{ display: 'flex', gap: '0.35rem' }}>
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-icon"
+                          style={{ width: 32, height: 32 }}
+                          onClick={() => { setEditingPeriodId(per.id); setEditingPeriodName(per.name); setPeriodError(''); }}
+                          aria-label={`Rename ${per.name}`}
+                          title="Rename period"
+                        >
+                          <i className='bx bx-edit'></i>
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-icon"
+                          style={{ width: 32, height: 32 }}
+                          onClick={() => handleDeletePeriod(per)}
+                          aria-label={`Delete ${per.name}`}
+                          title="Delete period"
+                        >
+                          <i className='bx bx-trash'></i>
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
-              ))}
-            </div>
-          ) : (
-            <div className="card" style={{ padding: '1.5rem', textAlign: 'center', background: 'var(--bg-subtle)' }}>
-              <i className='bx bx-group' style={{ fontSize: '1.6rem', color: 'var(--text-muted)' }}></i>
-              <div style={{ fontWeight: 600, fontSize: '0.9rem', marginTop: '0.3rem' }}>
-                {roster.length === 0 ? 'No students on your roster yet.' : 'No students in this view.'}
+
+                {renderCollapsible(per.id, members.length > 0 ? (
+                  members.map(renderStudentRow)
+                ) : (
+                  <div style={{ padding: '0.9rem 1rem', borderTop: '1px solid var(--border-subtle)', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                    No students in this period yet. Use the dropdown on a student to move them here.
+                  </div>
+                ))}
               </div>
-              {roster.length === 0 && (
-                <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
-                  Students join by creating an account and entering your access code:{' '}
-                  <strong style={{ fontFamily: 'var(--font-mono)' }}>{currentProgram.code}</strong>
-                </p>
-              )}
+            );
+          })}
+
+          {/* Students not in a period yet */}
+          {unassignedStudents.length > 0 && (
+            <div className="card" style={{ marginBottom: '1rem' }}>
+              <div style={{ background: 'var(--bg-subtle)', padding: '0.4rem' }}>
+                <button
+                  type="button"
+                  onClick={() => toggleCollapsed('unassigned')}
+                  aria-expanded={!collapsed.unassigned}
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', width: '100%', textAlign: 'left', padding: '0.4rem' }}
+                >
+                  {renderChevron('unassigned')}
+                  <strong style={{ fontSize: '0.98rem' }}>{periods.length > 0 ? 'Unassigned' : 'All Students'}</strong>
+                  <span className="status-badge badge-draft">{unassignedStudents.length} student{unassignedStudents.length === 1 ? '' : 's'}</span>
+                </button>
+              </div>
+              {renderCollapsible('unassigned', (
+                <>
+                  {periods.length === 0 && (
+                    <div style={{ padding: '0.7rem 1rem', borderTop: '1px solid var(--border-subtle)', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                      Add a class period above to start organizing your students.
+                    </div>
+                  )}
+                  {unassignedStudents.map(renderStudentRow)}
+                </>
+              ))}
             </div>
           )}
         </div>
@@ -851,6 +903,12 @@ export default function FacilitatorDashboardView({
         onReject={handleRejectProject}
         periods={periods}
         onSetPeriods={(projId, ids) => equipStore.setProjectPeriods(currentProgram.id, projId, ids)}
+      />
+
+      <AddPeriodModal
+        isOpen={periodModalOpen}
+        onClose={() => setPeriodModalOpen(false)}
+        onAdd={handleAddPeriod}
       />
 
       <QrCodeModal

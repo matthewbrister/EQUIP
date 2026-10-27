@@ -67,7 +67,7 @@ export default function SettingsModal({ isOpen, onClose }) {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.5rem' }}>
               {[
                 { id: 'blue', label: 'Blue', color: settings.theme === 'dark' ? '#60a5fa' : '#2563eb' },
-                { id: 'slate', label: 'Slate', color: settings.theme === 'dark' ? '#94a3b8' : '#475569' },
+                { id: 'slate', label: 'Slate', color: settings.theme === 'dark' ? '#e5e5e5' : '#475569' },
                 { id: 'teal', label: 'Teal', color: settings.theme === 'dark' ? '#2dd4bf' : '#0d9488' },
                 { id: 'indigo', label: 'Indigo', color: settings.theme === 'dark' ? '#818cf8' : '#4f46e5' }
               ].map(acc => (

@@ -82,17 +82,18 @@
 
 /* Dark Theme */
 [data-theme="dark"] {
-  --bg-app: #0b1120;
-  --bg-surface: #131d31;
-  --bg-subtle: #1a263d;
-  --bg-muted: #243452;
+  color-scheme: dark;
+  --bg-app: #0a0a0a;
+  --bg-surface: #141414;
+  --bg-subtle: #1c1c1c;
+  --bg-muted: #262626;
 
-  --text-main: #f8fafc;
-  --text-secondary: #cbd5e1;
-  --text-muted: #94a3b8;
+  --text-main: #fafafa;
+  --text-secondary: #d4d4d4;
+  --text-muted: #a3a3a3;
 
-  --border-subtle: #243452;
-  --border-strong: #334466;
+  --border-subtle: #262626;
+  --border-strong: #404040;
 
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
@@ -111,21 +112,21 @@
 /* Dark-mode accent palettes: lighter, softer tones with dark text on filled
    buttons so each accent reads naturally on dark surfaces. Placed after the
    dark block and using compound selectors so they always win. */
-[data-theme="dark"],
 [data-theme="dark"][data-accent="blue"] {
   --color-primary: #60a5fa;
   --color-primary-hover: #93c5fd;
   --color-primary-light: rgba(96, 165, 250, 0.14);
   --color-primary-border: rgba(96, 165, 250, 0.35);
-  --color-on-primary: #0b1120;
+  --color-on-primary: #0a0a0a;
 }
 
+[data-theme="dark"],
 [data-theme="dark"][data-accent="slate"] {
-  --color-primary: #94a3b8;
-  --color-primary-hover: #cbd5e1;
-  --color-primary-light: rgba(148, 163, 184, 0.14);
-  --color-primary-border: rgba(148, 163, 184, 0.35);
-  --color-on-primary: #0b1120;
+  --color-primary: #e5e5e5;
+  --color-primary-hover: #ffffff;
+  --color-primary-light: rgba(255, 255, 255, 0.08);
+  --color-primary-border: rgba(255, 255, 255, 0.22);
+  --color-on-primary: #0a0a0a;
 }
 
 [data-theme="dark"][data-accent="teal"] {
@@ -133,7 +134,7 @@
   --color-primary-hover: #5eead4;
   --color-primary-light: rgba(45, 212, 191, 0.13);
   --color-primary-border: rgba(45, 212, 191, 0.35);
-  --color-on-primary: #0b1120;
+  --color-on-primary: #0a0a0a;
 }
 
 [data-theme="dark"][data-accent="indigo"] {
@@ -141,7 +142,7 @@
   --color-primary-hover: #a5b4fc;
   --color-primary-light: rgba(129, 140, 248, 0.15);
   --color-primary-border: rgba(129, 140, 248, 0.38);
-  --color-on-primary: #0b1120;
+  --color-on-primary: #0a0a0a;
 }
 
 /* Density: Compact */
@@ -509,7 +510,7 @@ select {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.5);
+  background: rgba(0, 0, 0, 0.55);
   backdrop-filter: blur(2px);
   z-index: 100;
   display: flex;
@@ -708,7 +709,7 @@ select {
 .mobile-drawer-backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(15, 23, 42, 0.4);
+  background: rgba(0, 0, 0, 0.5);
 }
 
 .mobile-drawer-content {
@@ -1258,4 +1259,13 @@ select {
 
 .test-panel-link:hover {
   text-decoration: underline;
+}
+
+/* Neutral backdrops in dark mode */
+[data-theme="dark"] .modal-overlay {
+  background: rgba(0, 0, 0, 0.7);
+}
+
+[data-theme="dark"] .mobile-drawer-backdrop {
+  background: rgba(0, 0, 0, 0.65);
 }

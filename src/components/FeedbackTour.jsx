@@ -215,7 +215,7 @@ export default function FeedbackTour({ role, currentView, setCurrentView, onSele
           position: 'fixed',
           inset: 0,
           zIndex: 200,
-          background: rect ? 'transparent' : 'rgba(15, 23, 42, 0.55)',
+          background: rect ? 'transparent' : 'rgba(0, 0, 0, 0.6)',
           transition: 'background-color 200ms ease'
         }}
       />
@@ -231,7 +231,7 @@ export default function FeedbackTour({ role, currentView, setCurrentView, onSele
             width: rect.width + PAD * 2,
             height: rect.height + PAD * 2,
             borderRadius: 'var(--radius-lg)',
-            boxShadow: '0 0 0 9999px rgba(15, 23, 42, 0.55), 0 0 0 2px var(--color-primary)',
+            boxShadow: '0 0 0 9999px rgba(0, 0, 0, 0.6), 0 0 0 2px var(--color-primary)',
             pointerEvents: 'none',
             opacity: ready ? 1 : 0,
             transition: 'top 250ms ease, left 250ms ease, width 250ms ease, height 250ms ease, opacity 200ms ease'
