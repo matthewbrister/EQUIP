@@ -73,3 +73,20 @@ EQUIP uses Firebase Google Authentication. Firebase manages the OAuth flow and s
 ## 9. GitHub Pages OAuth
 
 The Firebase authorized-domain and OAuth redirect configuration must include the deployed GitHub Pages domain. Add the production site URL to the Google Cloud OAuth app only if Google Console still reports a redirect mismatch.
+
+## 10. Configure the GitHub Pages build
+
+The Pages build runs on GitHub Actions, so it cannot read your local `.env.local`. In the repository, open **Settings > Secrets and variables > Actions > New repository secret** and add the following secrets using the matching values from your local `.env.local`:
+
+- `VITE_FIREBASE_API_KEY`
+- `VITE_FIREBASE_AUTH_DOMAIN`
+- `VITE_FIREBASE_PROJECT_ID`
+- `VITE_FIREBASE_STORAGE_BUCKET`
+- `VITE_FIREBASE_MESSAGING_SENDER_ID`
+- `VITE_FIREBASE_APP_ID`
+- `VITE_CLOUDINARY_CLOUD_NAME`
+- `VITE_CLOUDINARY_UPLOAD_PRESET`
+
+These are client-side Firebase configuration and an unsigned Cloudinary upload preset; their values are included in the public site bundle. GitHub Secrets keep them out of the repository and build logs, but do not make them private from site visitors. Do not add a Firebase service-account key, Cloudinary API secret, or other server credential.
+
+The deployment workflow checks that all eight secrets are present before building, so it will not publish a site with missing configuration. After adding them, open **Actions > Deploy to GitHub Pages > Run workflow** and run it on `main`. The Firebase Authentication authorized domains must also include `matthewbrister.github.io`.
