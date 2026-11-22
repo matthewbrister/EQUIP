@@ -77,7 +77,6 @@ export default function Navbar({ currentView, setCurrentView, currentUser, onOpe
         {/* Brand */}
         <div className="brand-wrapper" onClick={() => go('landing')} role="link" tabIndex={0}
           onKeyDown={(e) => { if (e.key === 'Enter') go('landing'); }}>
-          <div className="brand-logo-mark"><i className='bx bx-microchip'></i></div>
           <span className="brand-name">EQUIP</span>
         </div>
 

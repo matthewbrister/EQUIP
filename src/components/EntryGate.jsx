@@ -12,9 +12,6 @@ export default function EntryGate({ onChoose }) {
     }}>
       <div style={{ width: '100%', maxWidth: '540px' }}>
         <div style={{ textAlign: 'center', marginBottom: '1.75rem' }}>
-          <div className="brand-logo-mark" style={{ margin: '0 auto 0.75rem', width: '44px', height: '44px', fontSize: '1.5rem' }}>
-            <i className='bx bx-microchip'></i>
-          </div>
           <h1 style={{ fontSize: '1.5rem', fontWeight: 800, letterSpacing: '-0.02em' }}>Welcome to EQUIP</h1>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '0.25rem' }}>
             How would you like to continue?

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { equipStore } from '../data/store';
+import { uploadImage } from '../lib/cloudinary';
 
 export default function ProgramCreateView({ currentUser, setCurrentView }) {
   const [name, setName] = useState('');
@@ -11,29 +12,41 @@ export default function ProgramCreateView({ currentUser, setCurrentView }) {
   const [description, setDescription] = useState('');
   const [showTechnologyPublicly, setShowTechnologyPublicly] = useState(false);
   const [showProjectsPublicly, setShowProjectsPublicly] = useState(false);
+  const [photo, setPhoto] = useState('');
+  const [photoError, setPhotoError] = useState('');
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
 
-  const handleSubmit = (e) => {
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!name.trim()) return;
 
-    const created = equipStore.createProgram({
-      name,
-      location,
-      campusRoomNumber,
-      facilitatorEmail,
-      facilitatorPhone,
-      facilitatorOfficeHours,
-      description,
-      showTechnologyPublicly,
-      showProjectsPublicly
-    }, currentUser);
-
-    // Ensure the visibility flags persist even if createProgram ignores unknown fields
-    if (created?.id) {
-      equipStore.updateProgram(created.id, { showTechnologyPublicly, showProjectsPublicly });
+    setIsSaving(true);
+    try {
+      const created = await equipStore.createProgram({
+        name, location, campusRoomNumber, facilitatorEmail, facilitatorPhone,
+        facilitatorOfficeHours, description, photo, showTechnologyPublicly, showProjectsPublicly
+      }, currentUser);
+      if (created?.id) setCurrentView('facilitator');
+    } finally {
+      setIsSaving(false);
     }
+  };
 
-    setCurrentView('facilitator');
+  const handlePhotoChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPhotoError('');
+    setIsUploadingPhoto(true);
+    try {
+      setPhoto(await uploadImage(file));
+    } catch (error) {
+      setPhotoError(error.message);
+    } finally {
+      setIsUploadingPhoto(false);
+      e.target.value = '';
+    }
   };
 
   return (
@@ -111,6 +124,14 @@ export default function ProgramCreateView({ currentUser, setCurrentView }) {
             />
           </div>
 
+          <div className="form-group">
+            <label className="form-label">Program Image</label>
+            <input type="file" className="form-input" accept="image/*" onChange={handlePhotoChange} disabled={isUploadingPhoto} />
+            {isUploadingPhoto && <div className="form-help-text">Uploading image…</div>}
+            {photoError && <div className="form-help-text" role="alert" style={{ color: 'var(--color-danger)' }}>{photoError}</div>}
+            {photo && <img src={photo} alt="Program preview" style={{ width: 180, height: 110, objectFit: 'cover', borderRadius: 'var(--radius-sm)', marginTop: '0.5rem' }} />}
+          </div>
+
           <div className="grid-2">
             <div className="form-group">
               <label className="form-label form-label-required">Contact Email</label>
@@ -168,8 +189,8 @@ export default function ProgramCreateView({ currentUser, setCurrentView }) {
             >
               Cancel
             </button>
-            <button type="submit" className="btn btn-primary">
-              Submit Program Draft
+            <button type="submit" className="btn btn-primary" disabled={isSaving || isUploadingPhoto}>
+              {isSaving ? 'Saving…' : 'Submit Program Draft'}
             </button>
           </div>
         </form>

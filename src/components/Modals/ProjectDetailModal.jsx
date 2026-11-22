@@ -7,6 +7,8 @@ export default function ProjectDetailModal({
   isFacilitator,
   onApprove,
   onReject,
+  isOwner = false,
+  onEdit,
   periods = [],
   onSetPeriods
 }) {
@@ -95,6 +97,21 @@ export default function ProjectDetailModal({
               <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>No communication logs recorded.</p>
             )}
           </div>
+
+          {!isFacilitator && isOwner && project.status === 'needs-revisions' && (
+            <div className="alert-box alert-info" style={{ marginTop: '1.25rem', alignItems: 'flex-start' }}>
+              <i className='bx bx-message-square-detail'></i>
+              <div style={{ flex: 1 }}>
+                <strong>Facilitator feedback</strong>
+                <p style={{ margin: '0.25rem 0 0.75rem', fontSize: '0.82rem', lineHeight: 1.5 }}>
+                  {project.facilitatorFeedback || 'Your facilitator requested changes to this project.'}
+                </p>
+                <button type="button" className="btn btn-primary btn-sm" onClick={() => onEdit?.(project)}>
+                  <i className='bx bx-edit'></i> Edit & Resubmit
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Class Period Tags (facilitator only) */}
           {isFacilitator && (

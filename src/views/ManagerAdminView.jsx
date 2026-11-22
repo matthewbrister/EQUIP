@@ -1,28 +1,81 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { equipStore } from '../data/store';
+import { auth, db } from '../lib/firebase';
+import { collection, doc, getDocs, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
 
-export default function ManagerAdminView({ setCurrentView, onSelectRole }) {
+export default function ManagerAdminView() {
   const [activeTab, setActiveTab] = useState('facilitators'); // 'facilitators' | 'programs'
+  const [facilitators, setFacilitators] = useState([]);
+  const [isLoadingFacilitators, setIsLoadingFacilitators] = useState(true);
+  const [facilitatorError, setFacilitatorError] = useState('');
+  const [updatingFacilitatorId, setUpdatingFacilitatorId] = useState(null);
 
-  const facilitatorRequests = equipStore.getFacilitatorRequests();
   const programs = equipStore.getPrograms();
 
-  const pendingRequests = facilitatorRequests.filter(r => r.status === 'pending');
-  const approvedRequests = facilitatorRequests.filter(r => r.status === 'approved');
+  useEffect(() => {
+    let active = true;
+
+    const loadFacilitators = async () => {
+      if (!db) {
+        setFacilitatorError('Firebase is not configured, so facilitator accounts cannot be loaded.');
+        setIsLoadingFacilitators(false);
+        return;
+      }
+
+      try {
+        const facilitatorQuery = query(collection(db, 'users'), where('role', '==', 'facilitator'));
+        const snapshot = await getDocs(facilitatorQuery);
+        if (active) {
+          setFacilitators(snapshot.docs
+            .filter(account => account.id !== auth?.currentUser?.uid)
+            .map(account => ({ id: account.id, ...account.data() })));
+        }
+      } catch (error) {
+        console.error('Unable to load facilitator accounts', error);
+        if (active) {
+          setFacilitatorError(error.code === 'permission-denied'
+            ? `Firestore denied the facilitator list. Publish the latest firebase/firestore.rules to the "${db.app.options.projectId}" Firebase project.`
+            : error.message || 'Unable to load facilitator accounts.');
+        }
+      } finally {
+        if (active) setIsLoadingFacilitators(false);
+      }
+    };
+
+    loadFacilitators();
+    return () => { active = false; };
+  }, []);
+
+  const pendingRequests = facilitators.filter(account => account.facilitatorStatus === 'pending');
+  const approvedRequests = facilitators.filter(account => account.facilitatorStatus === 'approved');
 
   const draftPrograms = programs.filter(p => p.status === 'draft');
   const approvedPrograms = programs.filter(p => p.status === 'approved');
 
-  const handleApproveFacilitator = (reqId) => {
-    equipStore.approveFacilitatorRequest(reqId);
+  const updateFacilitatorStatus = async (accountId, status) => {
+    if (!db) return;
+    setFacilitatorError('');
+    setUpdatingFacilitatorId(accountId);
+    try {
+      await updateDoc(doc(db, 'users', accountId), {
+        facilitatorStatus: status,
+        updatedAt: serverTimestamp()
+      });
+      setFacilitators(accounts => accounts.map(account => (
+        account.id === accountId ? { ...account, facilitatorStatus: status } : account
+      )));
+    } catch (error) {
+      console.error(`Unable to ${status} facilitator account`, error);
+      setFacilitatorError(error.code === 'permission-denied'
+        ? `Firestore denied this approval change. Publish the latest firebase/firestore.rules to the "${db.app.options.projectId}" Firebase project.`
+        : error.message || `Unable to ${status} facilitator account.`);
+    } finally {
+      setUpdatingFacilitatorId(null);
+    }
   };
 
-  const handleRejectFacilitator = (reqId) => {
-    equipStore.rejectFacilitatorRequest(reqId);
-  };
-
-  const handleApproveProgram = (programId) => {
-    equipStore.approveProgram(programId);
+  const handleApproveProgram = async (programId) => {
+    await equipStore.approveProgram(programId);
   };
 
   return (
@@ -71,7 +124,18 @@ export default function ManagerAdminView({ setCurrentView, onSelectRole }) {
             </p>
           </div>
 
-          {pendingRequests.length > 0 ? (
+          {facilitatorError && (
+            <div className="alert-box alert-danger" role="alert" style={{ marginBottom: '1rem' }}>
+              <i className='bx bx-error-circle'></i>
+              <span>{facilitatorError}</span>
+            </div>
+          )}
+
+          {isLoadingFacilitators ? (
+            <div className="card" style={{ padding: '1.5rem', textAlign: 'center', marginBottom: '2rem' }}>
+              Loading facilitator accounts…
+            </div>
+          ) : pendingRequests.length > 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '2rem' }}>
               {pendingRequests.map(req => (
                 <div key={req.id} className="card" style={{ padding: '1.25rem' }}>
@@ -79,27 +143,25 @@ export default function ManagerAdminView({ setCurrentView, onSelectRole }) {
                     <div style={{ flex: 1, minWidth: '240px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.25rem' }}>
                         <span className="status-badge badge-needs-repairs">Pending Approval</span>
-                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{req.school}</span>
                       </div>
                       <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>{req.name}</h3>
                       <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>
-                        {req.email} • {req.googleAuthId ? 'Google OAuth Token Verified' : 'Email not independently verified'}
+                        {req.email}
                       </div>
-                      <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                        {req.notes}
-                      </p>
                     </div>
 
                     <div style={{ display: 'flex', gap: '0.5rem' }}>
                       <button
                         className="btn btn-secondary btn-sm"
-                        onClick={() => handleRejectFacilitator(req.id)}
+                        disabled={updatingFacilitatorId !== null}
+                        onClick={() => updateFacilitatorStatus(req.id, 'rejected')}
                       >
                         Reject
                       </button>
                       <button
                         className="btn btn-success btn-sm"
-                        onClick={() => handleApproveFacilitator(req.id)}
+                        disabled={updatingFacilitatorId !== null}
+                        onClick={() => updateFacilitatorStatus(req.id, 'approved')}
                       >
                         <i className='bx bx-check'></i> Approve Account
                       </button>
@@ -154,9 +216,6 @@ export default function ManagerAdminView({ setCurrentView, onSelectRole }) {
                     <div style={{ flex: 1, minWidth: '240px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.25rem' }}>
                         <span className="status-badge badge-needs-repairs">Draft Program</span>
-                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', fontWeight: 600 }}>
-                          Code: {prog.code}
-                        </span>
                       </div>
 
                       <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '0.2rem' }}>

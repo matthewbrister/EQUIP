@@ -1,5 +1,4 @@
 import React from 'react';
-import { equipStore } from '../data/store';
 
 export default function Footer({ onOpenSettings }) {
   return (
@@ -22,19 +21,6 @@ export default function Footer({ onOpenSettings }) {
               <span>Preferences</span>
             </button>
 
-            <button 
-              type="button"
-              onClick={() => {
-                if (window.confirm("Restore sample default data?")) {
-                  equipStore.resetToDefault();
-                  window.location.reload();
-                }
-              }}
-              style={{ color: 'var(--text-muted)', fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
-            >
-              <i className='bx bx-reset'></i>
-              <span>Reset Data</span>
-            </button>
           </div>
         </div>
       </div>

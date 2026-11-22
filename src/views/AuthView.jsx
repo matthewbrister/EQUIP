@@ -1,5 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { equipStore, avatarFor } from '../data/store';
+import React, { useState } from 'react';
+import { avatarFor } from '../data/store';
+import { auth, db, googleProvider, firebaseConfigured } from '../lib/firebase';
+import { signInWithPopup } from 'firebase/auth';
+import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
 
 const ordinal = (n) => {
     const s = ['th', 'st', 'nd', 'rd'];
@@ -11,30 +14,6 @@ const ordinal = (n) => {
 const GRADES = [
     { label: 'K', full: 'Kindergarten' },
     ...Array.from({ length: 12 }, (_, i) => ({ label: String(i + 1), full: `${ordinal(i + 1)} Grade` }))
-];
-
-// Mock Google accounts shown in the account chooser
-const MOCK_GOOGLE_ACCOUNTS = [
-    {
-        firstName: 'Taylor', lastName: 'Morgan', email: 'taylor.morgan@gmail.com',
-        picture: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&auto=format&fit=crop&q=80'
-    },
-    {
-        firstName: 'Jamie', lastName: 'Rivera', email: 'jamie.rivera@gmail.com',
-        picture: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=200&auto=format&fit=crop&q=80'
-    },
-    {
-        firstName: 'Casey', lastName: 'Nguyen', email: 'casey.nguyen@gmail.com',
-        picture: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=200&auto=format&fit=crop&q=80'
-    }
-];
-
-const DEMO_ACCOUNTS = [
-    { key: 'facilitatorApproved', label: 'Sarah Jenkins', sub: 'Approved facilitator' },
-    { key: 'facilitatorPending', label: 'Emily Thornton', sub: 'Pending facilitator' },
-    { key: 'studentJoined', label: 'Caden Miller', sub: 'Student on a roster' },
-    { key: 'studentNew', label: 'Alex Rivera', sub: 'Student with no code yet' },
-    { key: 'manager', label: 'Jordan Hayes', sub: 'Website manager' }
 ];
 
 const ROLE_LABEL = { student: 'Student', facilitator: 'Facilitator', manager: 'Website Manager' };
@@ -61,7 +40,7 @@ function Avatar({ src, name, size = 40 }) {
     );
 }
 
-export default function AuthView({ currentUser, preset, onAuthSuccess, onSelectRole, onSignOut }) {
+export default function AuthView({ currentUser, preset, authError, isAuthLoading, onAuthSuccess, onSignOut }) {
     const startsSignedIn = preset?.mode === 'signin';
 
     const [mode, setMode] = useState(startsSignedIn ? 'signin' : 'signup');
@@ -70,25 +49,17 @@ export default function AuthView({ currentUser, preset, onAuthSuccess, onSelectR
 
     const [role, setRole] = useState(preset?.mode === 'signup' ? preset.role || null : null);
     const [grade, setGrade] = useState(null);
-    const [profile, setProfile] = useState(null);
-    const [user, setUser] = useState(null);
-    const [welcomeBack, setWelcomeBack] = useState(false);
 
-    const [googleStatus, setGoogleStatus] = useState('idle'); // 'idle' | 'picking' | 'connecting'
+    const [googleStatus, setGoogleStatus] = useState('idle');
     const [googleError, setGoogleError] = useState(null); // { text, action: 'signin' | 'signup' }
     const [error, setError] = useState('');
-    const [inFlow, setInFlow] = useState(false);
-    const [showDemo, setShowDemo] = useState(false);
-
-    const timers = useRef([]);
-    useEffect(() => () => timers.current.forEach(clearTimeout), []);
 
     // Which dots to show for the current path (none when just signing in)
     const flowSteps = mode === 'signin'
         ? []
         : role === 'facilitator'
-            ? ['role', 'google', 'confirm']
-            : ['role', 'grade', 'google', 'confirm'];
+            ? ['role', 'google']
+            : ['role', 'grade', 'google'];
     const stepIndex = flowSteps.indexOf(step);
 
     const go = (next, dir = 'forward') => {
@@ -103,7 +74,6 @@ export default function AuthView({ currentUser, preset, onAuthSuccess, onSelectR
         if (m === mode) return;
         setMode(m);
         setGoogleStatus('idle');
-        setProfile(null);
         go(m === 'signin' ? 'google' : 'role');
     };
 
@@ -111,61 +81,173 @@ export default function AuthView({ currentUser, preset, onAuthSuccess, onSelectR
         if (stepIndex > 0) go(flowSteps[stepIndex - 1], 'back');
     };
 
-    // After the success screen, move on to the main screen
-    useEffect(() => {
-        if (step !== 'done' || !user) return undefined;
-        const t = setTimeout(() => onAuthSuccess(user), 2000);
-        return () => clearTimeout(t);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [step, user]);
+    const startGoogleOAuth = async () => {
+        if (!firebaseConfigured || !auth) {
+            setGoogleError({
+                text: 'Google OAuth is not configured yet. Add the Firebase environment variables and restart Vite.',
+                action: 'signup'
+            });
+            return;
+        }
 
-    const pickGoogleAccount = (acct) => {
-        setGoogleStatus('connecting');
-        const t = setTimeout(() => {
-            const p = { ...acct };
-            setProfile(p);
-            setGoogleStatus('idle');
-
-            if (mode === 'signin') {
-                const res = equipStore.signInWithGoogle(p);
-                if (res.success) {
-                    setUser(res.user);
-                    setWelcomeBack(true);
-                    setInFlow(true);
-                    go('done');
-                } else {
-                    setGoogleError({
-                        text: `No account exists for ${p.email}. Sign up to create one.`,
-                        action: 'signup'
-                    });
-                }
-            } else if (equipStore.findAccountByEmail(p.email)) {
-                setGoogleError({
-                    text: `An account already exists for ${p.email}. Log in instead.`,
-                    action: 'signin'
-                });
-            } else {
-                go('confirm');
-            }
-        }, 900);
-        timers.current.push(t);
-    };
-
-    const handleCreate = () => {
-        const res = equipStore.createAccountFromGoogle({ profile, role, grade: grade?.full });
-        if (res.success) {
-            setUser(res.user);
-            setInFlow(true);
-            go('done');
+        if (mode === 'signup') {
+            sessionStorage.setItem('equip_pending_role', role || '');
+            sessionStorage.setItem('equip_pending_grade', grade?.full || '');
         } else {
-            setError(res.message);
+            sessionStorage.removeItem('equip_pending_role');
+            sessionStorage.removeItem('equip_pending_grade');
+        }
+
+        setGoogleStatus('connecting');
+        try {
+            await signInWithPopup(auth, googleProvider);
+        } catch (oauthError) {
+            setGoogleStatus('idle');
+            setGoogleError({ text: oauthError.message, action: mode === 'signin' ? 'signup' : 'signin' });
         }
     };
 
-    const signedIn = currentUser && currentUser.role !== 'guest';
+    const hasFirebaseAccount = currentUser?.id && currentUser.id !== 'guest';
+    const needsAccountSetup = hasFirebaseAccount && !['student', 'facilitator', 'manager'].includes(currentUser.role);
+    const selectedRole = ['student', 'facilitator'].includes(currentUser?.role) ? currentUser.role : role;
+
+    const completeAccountSetup = async () => {
+        if (!auth?.currentUser || !db || !selectedRole) return;
+        if (selectedRole === 'student' && !grade) {
+            setError('Choose your grade to finish setting up your account.');
+            return;
+        }
+
+        setGoogleStatus('connecting');
+        setError('');
+        try {
+            const profile = {
+                name: auth.currentUser.displayName || currentUser.name,
+                email: auth.currentUser.email || currentUser.email,
+                photoURL: auth.currentUser.photoURL || currentUser.avatar || '',
+                role: selectedRole,
+                grade: selectedRole === 'student' ? grade?.full || currentUser.grade : null,
+                facilitatorStatus: selectedRole === 'facilitator' ? 'pending' : null,
+                programId: currentUser.programId || null,
+                updatedAt: serverTimestamp()
+            };
+            await setDoc(doc(db, 'users', auth.currentUser.uid), profile, { merge: true });
+
+            const updatedUser = {
+                ...currentUser,
+                ...profile,
+                avatar: profile.photoURL,
+                grade: profile.grade || undefined,
+                facilitatorStatus: profile.facilitatorStatus || undefined
+            };
+            equipStore.setCurrentUser(updatedUser);
+            onAuthSuccess(updatedUser);
+        } catch (setupError) {
+            console.error('Unable to complete EQUIP account setup', setupError);
+            setError(setupError.message || 'Your Google sign-in worked, but EQUIP could not save your account setup.');
+        } finally {
+            setGoogleStatus('idle');
+        }
+    };
+
+    const signedIn = hasFirebaseAccount && !needsAccountSetup;
+
+    if (hasFirebaseAccount && isAuthLoading) {
+        return (
+            <div className="container" style={{ padding: '4rem 1.25rem', maxWidth: '460px', textAlign: 'center' }}>
+                <div className="card" style={{ padding: '2rem' }}>
+                    <div className="auth-spinner" aria-hidden="true"></div>
+                    <h1 style={{ fontSize: '1.2rem', marginTop: '1rem' }}>Finishing your sign-in</h1>
+                    <p style={{ color: 'var(--text-muted)', marginTop: '0.35rem' }}>Loading your EQUIP account…</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (needsAccountSetup) {
+        return (
+            <div className="container" style={{ padding: '3rem 1.25rem', maxWidth: '520px' }}>
+                <div className="card" style={{ padding: '2rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.75rem' }}>
+                        <Avatar src={currentUser.avatar} name={currentUser.name} size={64} />
+                    </div>
+                    <h1 style={{ fontSize: '1.35rem', fontWeight: 800, textAlign: 'center' }}>Google sign-in succeeded</h1>
+                    <p style={{ color: 'var(--text-secondary)', textAlign: 'center', margin: '0.4rem 0 1.25rem' }}>
+                        Welcome, {currentUser.name}. Choose an account type to finish setting up EQUIP.
+                    </p>
+                    {(authError || error) && (
+                        <div className="alert-box alert-danger" role="alert" style={{ marginBottom: '1rem' }}>
+                            <i className='bx bx-error-circle'></i>
+                            <span>{error || authError}</span>
+                        </div>
+                    )}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', marginBottom: '1rem' }}>
+                        {[
+                            { id: 'student', title: "I'm a Student" },
+                            { id: 'facilitator', title: "I'm a Facilitator" }
+                        ].map(option => (
+                            <button
+                                key={option.id}
+                                type="button"
+                                onClick={() => setRole(option.id)}
+                                aria-pressed={selectedRole === option.id}
+                                className="btn btn-secondary"
+                                style={{
+                                    justifyContent: 'flex-start',
+                                    border: selectedRole === option.id ? '2px solid var(--color-primary)' : undefined,
+                                    background: selectedRole === option.id ? 'var(--color-primary-light)' : undefined
+                                }}
+                            >
+                                {option.title}
+                            </button>
+                        ))}
+                    </div>
+                    {selectedRole === 'student' && (
+                        <div style={{ marginBottom: '1rem' }}>
+                            <label className="form-label">Your grade</label>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.5rem' }}>
+                                {GRADES.map(option => {
+                                    const isSelected = grade?.label === option.label
+                                        || (!grade && currentUser.grade === option.full);
+                                    return (
+                                        <button
+                                            key={option.label}
+                                            type="button"
+                                            className="btn btn-secondary btn-sm"
+                                            aria-pressed={isSelected}
+                                            onClick={() => setGrade(option)}
+                                            style={{
+                                                border: isSelected ? '2px solid var(--color-primary)' : undefined,
+                                                background: isSelected ? 'var(--color-primary-light)' : undefined,
+                                                color: isSelected ? 'var(--color-primary)' : undefined
+                                            }}
+                                        >
+                                            {option.label}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+                    <button
+                        type="button"
+                        className="btn btn-primary"
+                        style={{ width: '100%' }}
+                        disabled={!selectedRole || (selectedRole === 'student' && !grade && !currentUser.grade) || googleStatus === 'connecting'}
+                        onClick={completeAccountSetup}
+                    >
+                        {googleStatus === 'connecting' ? 'Saving account…' : 'Finish Account Setup'}
+                    </button>
+                    <button type="button" className="btn btn-secondary" style={{ width: '100%', marginTop: '0.6rem' }} onClick={onSignOut}>
+                        Sign Out
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     // ---------- Already signed in ----------
-    if (signedIn && !inFlow) {
+    if (signedIn) {
         return (
             <div className="container" style={{ padding: '3.5rem 1.25rem', maxWidth: '460px' }}>
                 <div className="card" style={{ padding: '2rem', textAlign: 'center' }}>
@@ -285,11 +367,11 @@ export default function AuthView({ currentUser, preset, onAuthSuccess, onSelectR
                 return (
                     <>
                         <StepHeading
-                            icon="bxl-google"
-                            title={mode === 'signin' ? 'Log in with Google' : 'Connect your Google account'}
+                            icon="bx-log-in-circle"
+                            title={mode === 'signin' ? 'Log in to EQUIP' : 'Create your EQUIP account'}
                             text={mode === 'signin'
-                                ? 'Use the Google account you signed up with.'
-                                : 'EQUIP uses Google to sign you in, so there is no password to remember.'}
+                                ? 'Use Google to sign in securely.'
+                                : 'Connect Google to create your account.'}
                         />
 
                         {googleError && (
@@ -308,10 +390,24 @@ export default function AuthView({ currentUser, preset, onAuthSuccess, onSelectR
                             </div>
                         )}
 
-                        {googleStatus === 'idle' && (
+                        {error && (
+                            <div className="alert-box alert-danger" role="alert">
+                                <i className='bx bx-error-circle'></i>
+                                <span>{error}</span>
+                            </div>
+                        )}
+
+                        {googleStatus === 'connecting' && (
+                            <div style={{ textAlign: 'center', padding: '1.25rem 0' }}>
+                                <div className="auth-spinner" aria-hidden="true"></div>
+                                <div style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', marginTop: '0.75rem' }}>Opening Google sign-in…</div>
+                            </div>
+                        )}
+
+                        {googleStatus !== 'connecting' && (
                             <button
                                 type="button"
-                                onClick={() => setGoogleStatus('picking')}
+                                onClick={startGoogleOAuth}
                                 style={{
                                     width: '100%',
                                     display: 'flex',
@@ -324,122 +420,18 @@ export default function AuthView({ currentUser, preset, onAuthSuccess, onSelectR
                                     background: '#ffffff',
                                     color: '#1f1f1f',
                                     fontWeight: 600,
-                                    fontSize: '0.95rem',
-                                    transition: 'var(--transition-fade)'
+                                    fontSize: '0.95rem'
                                 }}
                             >
                                 <GoogleLogo />
-                                <span>Continue with Google</span>
+                                <span>{mode === 'signin' ? 'Continue with Google' : 'Sign up with Google'}</span>
                             </button>
-                        )}
-
-                        {googleStatus === 'picking' && (
-                            <div className="auth-chooser">
-                                <div style={{ fontWeight: 700, fontSize: '0.95rem', marginBottom: '0.15rem' }}>Choose an account</div>
-                                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.6rem' }}>to continue to EQUIP</div>
-                                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                    {MOCK_GOOGLE_ACCOUNTS.map(a => (
-                                        <button
-                                            key={a.email}
-                                            type="button"
-                                            className="auth-chooser-row"
-                                            onClick={() => pickGoogleAccount(a)}
-                                        >
-                                            <Avatar src={a.picture} name={`${a.firstName} ${a.lastName}`} size={36} />
-                                            <div style={{ textAlign: 'left' }}>
-                                                <div style={{ fontWeight: 600, fontSize: '0.88rem', color: 'var(--text-main)' }}>{a.firstName} {a.lastName}</div>
-                                                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{a.email}</div>
-                                            </div>
-                                        </button>
-                                    ))}
-                                </div>
-                                <button type="button" onClick={() => setGoogleStatus('idle')} style={{ marginTop: '0.6rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                                    Cancel
-                                </button>
-                            </div>
-                        )}
-
-                        {googleStatus === 'connecting' && (
-                            <div style={{ textAlign: 'center', padding: '1.25rem 0' }}>
-                                <div className="auth-spinner" aria-hidden="true"></div>
-                                <div style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', marginTop: '0.75rem' }}>Connecting to Google…</div>
-                            </div>
                         )}
 
                         <p style={{ fontSize: '0.74rem', color: 'var(--text-muted)', textAlign: 'center', marginTop: '1rem' }}>
-                            Demo sign-in: no real Google account is used.
+                            Google provides your name, email address, and profile picture. No password is collected.
                         </p>
                     </>
-                );
-
-            case 'confirm':
-                return (
-                    <>
-                        <StepHeading icon="bx-id-card" title="Confirm your details" text="Make sure everything looks right." />
-                        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1rem' }}>
-                            <Avatar src={profile?.picture} name={`${profile?.firstName} ${profile?.lastName}`} size={76} />
-                        </div>
-
-                        <div style={{ border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', marginBottom: '0.75rem', overflow: 'hidden' }}>
-                            {[
-                                ['First name', profile?.firstName],
-                                ['Last name', profile?.lastName],
-                                ['Email', profile?.email],
-                                role === 'student' ? ['Grade', grade?.full] : ['Account type', 'Facilitator']
-                            ].map(([label, value], i) => (
-                                <div
-                                    key={label}
-                                    style={{
-                                        display: 'flex',
-                                        justifyContent: 'space-between',
-                                        gap: '1rem',
-                                        padding: '0.65rem 0.9rem',
-                                        fontSize: '0.88rem',
-                                        background: i % 2 ? 'var(--bg-subtle)' : 'var(--bg-surface)'
-                                    }}
-                                >
-                                    <span style={{ color: 'var(--text-muted)' }}>{label}</span>
-                                    <strong style={{ textAlign: 'right', wordBreak: 'break-all' }}>{value}</strong>
-                                </div>
-                            ))}
-                        </div>
-
-                        <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
-                            <button type="button" onClick={() => go('google', 'back')} style={{ fontSize: '0.8rem', color: 'var(--color-primary)', fontWeight: 600 }}>
-                                Not you? Use a different account
-                            </button>
-                        </div>
-
-                        {error && (
-                            <div className="alert-box alert-danger" role="alert">
-                                <i className='bx bx-error-circle'></i>
-                                <span>{error}</span>
-                            </div>
-                        )}
-
-                        <button className="btn btn-primary" style={{ width: '100%' }} onClick={handleCreate}>
-                            <span>Continue</span>
-                            <i className='bx bx-right-arrow-alt'></i>
-                        </button>
-                    </>
-                );
-
-            case 'done':
-                return (
-                    <div style={{ textAlign: 'center', padding: '1rem 0 0.5rem' }}>
-                        <div className="checkmark-wrap">
-                            <svg width="96" height="96" viewBox="0 0 56 56" aria-hidden="true">
-                                <circle className="checkmark-circle" cx="28" cy="28" r="26" fill="none" stroke="var(--color-success)" strokeWidth="3" />
-                                <path className="checkmark-check" d="M16 29 l8 8 l16 -17" fill="none" stroke="var(--color-success)" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
-                        </div>
-                        <h2 style={{ fontSize: '1.4rem', fontWeight: 800, marginTop: '1rem' }}>
-                            {welcomeBack ? `Welcome back, ${user?.firstName || user?.name?.split(' ')[0]}!` : 'Account created successfully'}
-                        </h2>
-                        <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', marginTop: '0.35rem' }}>
-                            {welcomeBack ? 'Signing you in…' : 'Taking you to the next step…'}
-                        </p>
-                    </div>
                 );
 
             default:
@@ -451,34 +443,32 @@ export default function AuthView({ currentUser, preset, onAuthSuccess, onSelectR
         <div className="container" style={{ padding: '3rem 1.25rem', maxWidth: '480px' }}>
             <div data-tour="auth-card" className="card" style={{ padding: '2rem', overflow: 'visible' }}>
                 {/* Log In / Sign Up */}
-                {step !== 'done' && (
-                    <div
-                        role="tablist"
-                        style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px', padding: '4px', background: 'var(--bg-subtle)', borderRadius: 'var(--radius-md)', marginBottom: '1.5rem' }}
-                    >
-                        {[{ id: 'signin', label: 'Log In' }, { id: 'signup', label: 'Sign Up' }].map(t => (
-                            <button
-                                key={t.id}
-                                type="button"
-                                role="tab"
-                                aria-selected={mode === t.id}
-                                onClick={() => switchMode(t.id)}
-                                style={{
-                                    padding: '0.5rem',
-                                    borderRadius: 'var(--radius-sm)',
-                                    fontWeight: 600,
-                                    fontSize: '0.88rem',
-                                    background: mode === t.id ? 'var(--bg-surface)' : 'transparent',
-                                    color: mode === t.id ? 'var(--text-main)' : 'var(--text-muted)',
-                                    boxShadow: mode === t.id ? 'var(--shadow-sm)' : 'none',
-                                    transition: 'var(--transition-fade)'
-                                }}
-                            >
-                                {t.label}
-                            </button>
-                        ))}
-                    </div>
-                )}
+                <div
+                    role="tablist"
+                    style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px', padding: '4px', background: 'var(--bg-subtle)', borderRadius: 'var(--radius-md)', marginBottom: '1.5rem' }}
+                >
+                    {[{ id: 'signin', label: 'Log In' }, { id: 'signup', label: 'Sign Up' }].map(t => (
+                        <button
+                            key={t.id}
+                            type="button"
+                            role="tab"
+                            aria-selected={mode === t.id}
+                            onClick={() => switchMode(t.id)}
+                            style={{
+                                padding: '0.5rem',
+                                borderRadius: 'var(--radius-sm)',
+                                fontWeight: 600,
+                                fontSize: '0.88rem',
+                                background: mode === t.id ? 'var(--bg-surface)' : 'transparent',
+                                color: mode === t.id ? 'var(--text-main)' : 'var(--text-muted)',
+                                boxShadow: mode === t.id ? 'var(--shadow-sm)' : 'none',
+                                transition: 'var(--transition-fade)'
+                            }}
+                        >
+                            {t.label}
+                        </button>
+                    ))}
+                </div>
 
                 {stepIndex > 0 && (
                     <button
@@ -512,39 +502,6 @@ export default function AuthView({ currentUser, preset, onAuthSuccess, onSelectR
                     </div>
                 )}
 
-                {/* Demo accounts (testing only), on the Log In screen */}
-                {mode === 'signin' && step === 'google' && googleStatus === 'idle' && (
-                    <div style={{ borderTop: '1px solid var(--border-subtle)', marginTop: '1.5rem', paddingTop: '0.85rem' }}>
-                        <button
-                            type="button"
-                            onClick={() => setShowDemo(s => !s)}
-                            style={{ width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.3rem', fontSize: '0.76rem', fontWeight: 600, color: 'var(--text-muted)' }}
-                        >
-                            <span>Testing? Use a demo account</span>
-                            <i className={`bx bx-chevron-down dropdown-caret ${showDemo ? 'is-open' : ''}`}></i>
-                        </button>
-
-                        {showDemo && (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', marginTop: '0.6rem' }}>
-                                {DEMO_ACCOUNTS.map(d => (
-                                    <button
-                                        key={d.key}
-                                        type="button"
-                                        className="btn btn-secondary btn-sm"
-                                        style={{ justifyContent: 'flex-start', gap: '0.6rem', padding: '0.5rem 0.7rem' }}
-                                        onClick={() => {
-                                            onSelectRole(d.key);
-                                            onAuthSuccess(equipStore.getCurrentUser());
-                                        }}
-                                    >
-                                        <span style={{ fontWeight: 600 }}>{d.label}</span>
-                                        <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>{d.sub}</span>
-                                    </button>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                )}
             </div>
         </div>
     );

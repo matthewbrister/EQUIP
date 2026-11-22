@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { equipStore, avatarFor } from '../data/store';
 import AddTechModal from '../components/Modals/AddTechModal';
 import TechDetailModal from '../components/Modals/TechDetailModal';
@@ -6,11 +6,11 @@ import ProjectDetailModal from '../components/Modals/ProjectDetailModal';
 import QrCodeModal from '../components/Modals/QrCodeModal';
 import Dropdown from '../components/Dropdown';
 import AddPeriodModal from '../components/Modals/AddPeriodModal';
+import { uploadImage } from '../lib/cloudinary';
 
 export default function FacilitatorDashboardView({
   currentUser,
   setCurrentView,
-  onSelectRole,
   onSignOut
 }) {
   const [activeTab, setActiveTab] = useState('tech'); // 'tech' | 'projects' | 'roster' | 'settings'
@@ -46,6 +46,21 @@ export default function FacilitatorDashboardView({
   const [editShowTech, setEditShowTech] = useState(currentProgram?.showTechnologyPublicly === true);
   const [editShowProjects, setEditShowProjects] = useState(currentProgram?.showProjectsPublicly === true);
   const [settingsSaved, setSettingsSaved] = useState(false);
+  const [isUploadingProgramPhoto, setIsUploadingProgramPhoto] = useState(false);
+  const [programPhotoError, setProgramPhotoError] = useState('');
+
+  useEffect(() => {
+    if (!currentProgram) return;
+    setEditName(currentProgram.name || '');
+    setEditLocation(currentProgram.location || '');
+    setEditRoom(currentProgram.campusRoomNumber || '');
+    setEditEmail(currentProgram.facilitator?.email || '');
+    setEditPhone(currentProgram.facilitator?.phone || '');
+    setEditHours(currentProgram.facilitator?.officeHours || '');
+    setEditPhoto(currentProgram.photo || '');
+    setEditShowTech(currentProgram.showTechnologyPublicly === true);
+    setEditShowProjects(currentProgram.showProjectsPublicly === true);
+  }, [currentProgram?.id]);
 
   // If facilitator is pending approval
   if (currentUser.role === 'facilitator' && ['pending', 'rejected'].includes(currentUser.facilitatorStatus)) {
@@ -81,6 +96,13 @@ export default function FacilitatorDashboardView({
 
   // If approved facilitator has no program yet
   if (!currentProgram) {
+    if (currentUser.programId && equipStore.isLoadingPrograms()) {
+      return (
+        <div className="container" style={{ padding: '3.5rem 1.25rem', textAlign: 'center' }}>
+          <div className="card" style={{ padding: '2rem' }}>Loading your program…</div>
+        </div>
+      );
+    }
     return (
       <div className="container" style={{ padding: '3.5rem 1.25rem', textAlign: 'center' }}>
         <div className="card" style={{ padding: '2.5rem', maxWidth: '580px', margin: '0 auto' }}>
@@ -105,7 +127,7 @@ export default function FacilitatorDashboardView({
   };
 
   const handleAddTech = (techInput) => {
-    equipStore.addTechnology(currentProgram.id, techInput);
+    return equipStore.addTechnology(currentProgram.id, techInput);
   };
 
   const handleUpdateTechStatus = (techId, newStatus) => {
@@ -124,9 +146,9 @@ export default function FacilitatorDashboardView({
     equipStore.rejectProject(currentProgram.id, projId, reason);
   };
 
-  const handleSaveSettings = (e) => {
+  const handleSaveSettings = async (e) => {
     e.preventDefault();
-    equipStore.updateProgram(currentProgram.id, {
+    const result = await equipStore.updateProgram(currentProgram.id, {
       name: editName,
       location: editLocation,
       campusRoomNumber: editRoom,
@@ -140,8 +162,25 @@ export default function FacilitatorDashboardView({
         officeHours: editHours
       }
     });
-    setSettingsSaved(true);
-    setTimeout(() => setSettingsSaved(false), 3000);
+    if (result.success) {
+      setSettingsSaved(true);
+      setTimeout(() => setSettingsSaved(false), 3000);
+    }
+  };
+
+  const handleProgramPhotoChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setProgramPhotoError('');
+    setIsUploadingProgramPhoto(true);
+    try {
+      setEditPhoto(await uploadImage(file));
+    } catch (error) {
+      setProgramPhotoError(error.message);
+    } finally {
+      setIsUploadingProgramPhoto(false);
+      e.target.value = '';
+    }
   };
 
   const techList = currentProgram.technologies || [];
@@ -175,13 +214,12 @@ export default function FacilitatorDashboardView({
 
   const studentsIn = (periodId) => roster.filter(r => r.periodId === periodId && periodName(periodId));
   const unassignedStudents = roster.filter(r => !r.periodId || !periodName(r.periodId));
-  const savedAccounts = equipStore.getAccounts();
-  const avatarOf = (s) => s.avatar || savedAccounts.find(a => a.id === s.studentId)?.avatar || avatarFor(s.name);
+  const avatarOf = (s) => s.avatar || avatarFor(s.name);
 
   const handleAddPeriod = (name) => equipStore.addPeriod(currentProgram.id, name);
 
-  const handleSaveRename = (periodId) => {
-    const res = equipStore.renamePeriod(currentProgram.id, periodId, editingPeriodName);
+  const handleSaveRename = async (periodId) => {
+    const res = await equipStore.renamePeriod(currentProgram.id, periodId, editingPeriodName);
     if (res.success) {
       setEditingPeriodId(null);
       setPeriodError('');
@@ -852,6 +890,14 @@ export default function FacilitatorDashboardView({
                 value={editHours}
                 onChange={(e) => setEditHours(e.target.value)}
               />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Program Image</label>
+              <input type="file" className="form-input" accept="image/*" onChange={handleProgramPhotoChange} disabled={isUploadingProgramPhoto} />
+              {isUploadingProgramPhoto && <div className="form-help-text">Uploading image…</div>}
+              {programPhotoError && <div className="form-help-text" role="alert" style={{ color: 'var(--color-danger)' }}>{programPhotoError}</div>}
+              {editPhoto && <img src={editPhoto} alt="Program preview" style={{ width: 180, height: 110, objectFit: 'cover', borderRadius: 'var(--radius-sm)', marginTop: '0.5rem' }} />}
             </div>
 
             <div data-tour="visibility-settings" style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', padding: '0.85rem 1rem', marginTop: '0.5rem' }}>

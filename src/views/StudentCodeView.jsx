@@ -4,38 +4,27 @@ import { equipStore } from '../data/store';
 export default function StudentCodeView({ currentUser, setCurrentView }) {
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
-  const [matchedProgram, setMatchedProgram] = useState(null);
+  const [isJoining, setIsJoining] = useState(false);
 
   const handleCodeChange = (e) => {
-    let val = e.target.value.toUpperCase();
-    setCode(val);
+    setCode(e.target.value.toUpperCase());
     setError('');
-
-    const clean = val.trim();
-    if (clean.length >= 8) {
-      const match = equipStore.getProgramByCode(clean);
-      if (match) {
-        setMatchedProgram(match);
-      } else {
-        setMatchedProgram(null);
-      }
-    } else {
-      setMatchedProgram(null);
-    }
   };
 
-  const handleJoin = (e) => {
+  const handleJoin = async (e) => {
     e.preventDefault();
     if (!code.trim()) {
       setError('Please enter your program access code.');
       return;
     }
 
-    const result = equipStore.joinProgramByCode(code.trim(), currentUser);
-    if (result.success) {
-      setCurrentView('student');
-    } else {
-      setError(result.message || 'Program not found. Please double-check your code.');
+    setIsJoining(true);
+    try {
+      const result = await equipStore.joinProgramByCode(code.trim(), currentUser);
+      if (result.success) setCurrentView('student');
+      else setError(result.message || 'Program not found. Please double-check your code.');
+    } finally {
+      setIsJoining(false);
     }
   };
 
@@ -82,32 +71,8 @@ export default function StudentCodeView({ currentUser, setCurrentView }) {
             />
           </div>
 
-          {matchedProgram && (
-            <div style={{
-              background: 'var(--bg-subtle)',
-              border: '1px solid var(--border-subtle)',
-              borderRadius: 'var(--radius-md)',
-              padding: '1rem',
-              textAlign: 'left',
-              marginBottom: '1.25rem'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: 'var(--color-success)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', marginBottom: '0.25rem' }}>
-                <i className='bx bx-check-circle'></i> Program Verified
-              </div>
-              <h3 style={{ fontSize: '1.05rem', fontWeight: 700, marginBottom: '0.2rem' }}>
-                {matchedProgram.name}
-              </h3>
-              <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                {matchedProgram.campusRoomNumber} • {matchedProgram.location}
-              </div>
-              <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.4rem' }}>
-                Facilitator: <strong>{matchedProgram.facilitator?.name}</strong>
-              </div>
-            </div>
-          )}
-
-          <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>
-            <span>Join Program Workspace</span>
+          <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={isJoining}>
+            <span>{isJoining ? 'Joining…' : 'Join Program Workspace'}</span>
             <i className='bx bx-right-arrow-alt'></i>
           </button>
         </form>

@@ -1,0 +1,362 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return signedIn()
+        && request.auth.token.email == 'matthewbristergaming@gmail.com'
+        && request.auth.token.email_verified == true;
+    }
+
+    function userPath(uid) {
+      return /databases/$(database)/documents/users/$(uid);
+    }
+
+    function programPath(programId) {
+      return /databases/$(database)/documents/programs/$(programId);
+    }
+
+    function rosterPath(programId, uid) {
+      return /databases/$(database)/documents/programs/$(programId)/roster/$(uid);
+    }
+
+    function programJoinCodeRecordPath(programId) {
+      return /databases/$(database)/documents/programJoinCodeRecords/$(programId);
+    }
+
+    function programCodeIndexPath(code) {
+      return /databases/$(database)/documents/programCodeIndex/$(code);
+    }
+
+    function isProgramOwner(programId) {
+      return signedIn()
+        && exists(programPath(programId))
+        && get(programPath(programId)).data.facilitatorId == request.auth.uid;
+    }
+
+    function isProgramMember(programId) {
+      return signedIn()
+        && exists(rosterPath(programId, request.auth.uid));
+    }
+
+    function isApprovedFacilitator() {
+      return signedIn()
+        && get(userPath(request.auth.uid)).data.role == 'facilitator'
+        && get(userPath(request.auth.uid)).data.facilitatorStatus == 'approved';
+    }
+
+    match /users/{uid} {
+      function isOwner() {
+        return signedIn() && request.auth.uid == uid;
+      }
+
+      function validIdentity(data) {
+        return data.name is string
+          && data.email is string
+          && data.email == request.auth.token.email
+          && data.photoURL is string;
+      }
+
+      function validSetup(data) {
+        return (data.role == null || data.role in ['student', 'facilitator'])
+          && (data.grade == null || data.grade is string)
+          && (data.facilitatorStatus == null || data.facilitatorStatus == 'pending')
+          && (data.programId == null || data.programId is string)
+          && (data.role != 'student' || data.grade is string)
+          && (data.role != 'facilitator' || data.facilitatorStatus == 'pending')
+          && (data.role != null || (data.grade == null && data.facilitatorStatus == null));
+      }
+
+      allow get: if isOwner() || isAdmin();
+      allow list: if isAdmin();
+
+      allow create: if isOwner()
+        && request.resource.data.keys().hasAll([
+          'name', 'email', 'photoURL', 'role', 'grade',
+          'facilitatorStatus', 'programId', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'name', 'email', 'photoURL', 'role', 'grade',
+          'facilitatorStatus', 'programId', 'createdAt', 'updatedAt'
+        ])
+        && validIdentity(request.resource.data)
+        && validSetup(request.resource.data)
+        && request.resource.data.programId == null
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+
+      allow update: if (
+          isOwner()
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['name', 'email', 'photoURL', 'role', 'grade', 'facilitatorStatus', 'programId', 'updatedAt'])
+          && validIdentity(request.resource.data)
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.updatedAt == request.time
+          && (
+            request.resource.data.role == resource.data.role
+            || (
+              resource.data.role == null
+              && request.resource.data.role in ['student', 'facilitator']
+              && validSetup(request.resource.data)
+            )
+          )
+          && (
+            request.resource.data.facilitatorStatus == resource.data.facilitatorStatus
+            || (
+              resource.data.facilitatorStatus == null
+              && request.resource.data.role == 'facilitator'
+              && request.resource.data.facilitatorStatus == 'pending'
+            )
+          )
+          && (
+            request.resource.data.grade == resource.data.grade
+            || (
+              request.resource.data.role == 'student'
+              && request.resource.data.grade is string
+            )
+          )
+          && (
+            request.resource.data.programId == resource.data.programId
+            || (
+              request.resource.data.role == 'student'
+              && request.resource.data.programId is string
+              && existsAfter(rosterPath(request.resource.data.programId, uid))
+            )
+            || (
+              request.resource.data.role == 'facilitator'
+              && request.resource.data.programId is string
+              && existsAfter(programPath(request.resource.data.programId))
+              && getAfter(programPath(request.resource.data.programId)).data.facilitatorId == uid
+            )
+          )
+        )
+        || (
+          resource.data.programId is string
+          && isProgramOwner(resource.data.programId)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['programId', 'updatedAt'])
+          && request.resource.data.programId == null
+          && request.resource.data.updatedAt == request.time
+          && !existsAfter(rosterPath(resource.data.programId, uid))
+        )
+        || (
+          isAdmin()
+          && resource.data.role == 'facilitator'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['facilitatorStatus', 'updatedAt'])
+          && request.resource.data.facilitatorStatus in ['approved', 'rejected']
+          && request.resource.data.updatedAt == request.time
+        );
+
+      allow delete: if isOwner()
+        && (
+          (
+            resource.data.role == 'student'
+            && (
+              resource.data.programId == null
+              || (
+                resource.data.programId is string
+                && !existsAfter(rosterPath(resource.data.programId, uid))
+              )
+            )
+          )
+          || (
+            resource.data.role == 'facilitator'
+            && resource.data.programId == null
+          )
+        );
+    }
+
+    match /programJoinCodeRecords/{programId} {
+        allow get: if isAdmin() || isProgramOwner(programId);
+        allow list: if false;
+
+        allow create: if isApprovedFacilitator()
+          && request.resource.data.keys().hasAll(['programId', 'code', 'updatedAt'])
+          && request.resource.data.keys().hasOnly(['programId', 'code', 'updatedAt'])
+          && request.resource.data.programId == programId
+          && request.resource.data.code is string
+          && request.resource.data.updatedAt == request.time
+          && getAfter(programPath(programId)).data.facilitatorId == request.auth.uid
+          && getAfter(programCodeIndexPath(request.resource.data.code)).data.programId == programId;
+
+        allow update: if isProgramOwner(programId)
+          && isApprovedFacilitator()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['code', 'updatedAt'])
+          && request.resource.data.programId == programId
+          && request.resource.data.code is string
+          && request.resource.data.updatedAt == request.time
+          && getAfter(programCodeIndexPath(request.resource.data.code)).data.programId == programId;
+
+        allow delete: if isAdmin() || (isProgramOwner(programId) && isApprovedFacilitator());
+    }
+
+    match /programCodeIndex/{code} {
+        allow get: if isAdmin()
+          || isApprovedFacilitator()
+          || (
+            signedIn()
+            && get(userPath(request.auth.uid)).data.role == 'student'
+          );
+        allow list: if false;
+
+        allow create: if isApprovedFacilitator()
+          && request.resource.data.keys().hasAll(['programId', 'code'])
+          && request.resource.data.keys().hasOnly(['programId', 'code'])
+          && request.resource.data.code == code
+          && getAfter(programPath(request.resource.data.programId)).data.facilitatorId == request.auth.uid
+          && getAfter(programJoinCodeRecordPath(request.resource.data.programId)).data.code == code;
+
+        allow update: if false;
+        allow delete: if isAdmin()
+          || (
+            isProgramOwner(resource.data.programId)
+            && isApprovedFacilitator()
+            && getAfter(programJoinCodeRecordPath(resource.data.programId)).data.code != code
+          );
+    }
+
+    match /programs/{programId} {
+      allow get, list: if resource.data.status == 'approved'
+        || isAdmin()
+        || (signedIn() && resource.data.facilitatorId == request.auth.uid);
+
+      allow create: if isApprovedFacilitator()
+        && request.resource.data.facilitatorId == request.auth.uid
+        && request.resource.data.status == 'draft'
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+
+      allow update: if (
+          isAdmin()
+          && resource.data.status == 'draft'
+          && request.resource.data.status == 'approved'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt'])
+          && request.resource.data.updatedAt == request.time
+        )
+        || (
+          signedIn()
+          && resource.data.facilitatorId == request.auth.uid
+          && isApprovedFacilitator()
+          && request.resource.data.facilitatorId == resource.data.facilitatorId
+          && request.resource.data.status == resource.data.status
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['name', 'location', 'campusRoomNumber', 'description', 'photo', 'showTechnologyPublicly', 'showProjectsPublicly', 'facilitator', 'updatedAt'])
+        );
+
+      allow delete: if isAdmin();
+
+      match /periods/{periodId} {
+        allow read: if isAdmin() || isProgramOwner(programId) || isProgramMember(programId);
+        allow create, update, delete: if isAdmin() || (isProgramOwner(programId) && isApprovedFacilitator());
+      }
+
+      match /roster/{studentId} {
+        allow get: if isAdmin() || isProgramOwner(programId) || (signedIn() && request.auth.uid == studentId);
+        allow list: if isAdmin() || isProgramOwner(programId);
+
+        allow create: if signedIn()
+          && request.auth.uid == studentId
+          && get(userPath(studentId)).data.role == 'student'
+          && get(programPath(programId)).data.status == 'approved'
+          && request.resource.data.keys().hasAll([
+            'studentId', 'programId', 'name', 'email', 'grade', 'avatar',
+            'joinedAt', 'periodId', 'accessCode'
+          ])
+          && request.resource.data.keys().hasOnly([
+            'studentId', 'programId', 'name', 'email', 'grade', 'avatar',
+            'joinedAt', 'periodId', 'accessCode'
+          ])
+          && request.resource.data.studentId == studentId
+          && get(programCodeIndexPath(request.resource.data.accessCode)).data.programId == programId
+          && request.resource.data.programId == programId
+          && request.resource.data.periodId == null
+          && request.resource.data.name is string
+          && request.resource.data.email == request.auth.token.email;
+
+        allow update: if isAdmin()
+          || (
+            isProgramOwner(programId)
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['periodId'])
+          );
+        allow delete: if isAdmin()
+          || isProgramOwner(programId)
+          || (signedIn() && request.auth.uid == studentId);
+      }
+
+      match /technologies/{technologyId} {
+        function publicTechnology() {
+          return get(programPath(programId)).data.status == 'approved'
+            && get(programPath(programId)).data.showTechnologyPublicly == true;
+        }
+
+        allow read: if isAdmin() || isProgramOwner(programId) || isProgramMember(programId) || publicTechnology();
+        allow create, update, delete: if isAdmin() || (isProgramOwner(programId) && isApprovedFacilitator());
+      }
+
+      match /projects/{projectId} {
+        function publicProject() {
+          return get(programPath(programId)).data.status == 'approved'
+            && get(programPath(programId)).data.showProjectsPublicly == true
+            && resource.data.status == 'approved';
+        }
+
+        allow read: if isAdmin()
+          || isProgramOwner(programId)
+          || publicProject()
+          || (
+            isProgramMember(programId)
+            && (resource.data.status == 'approved' || resource.data.createdByUid == request.auth.uid)
+          );
+
+        allow create: if isProgramMember(programId)
+          && request.auth.uid == request.resource.data.createdByUid
+          && request.resource.data.keys().hasAll([
+            'programId', 'createdByUid', 'name', 'status', 'submittedBy',
+            'submissionDate', 'approvedDate', 'category', 'description',
+            'photos', 'teamMembers', 'pastProjectHandlers', 'communicationLogs',
+            'externalLinks', 'periodIds'
+          ])
+          && request.resource.data.keys().hasOnly([
+            'programId', 'createdByUid', 'name', 'status', 'submittedBy',
+            'submissionDate', 'approvedDate', 'category', 'description',
+            'photos', 'teamMembers', 'pastProjectHandlers', 'communicationLogs',
+            'externalLinks', 'periodIds'
+          ])
+          && request.resource.data.programId == programId
+          && request.resource.data.status == 'draft'
+          && request.resource.data.photos is list
+          && request.resource.data.photos.size() <= 5;
+
+        allow update: if isAdmin()
+          || (
+            isProgramOwner(programId)
+            && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['status', 'approvedDate', 'facilitatorFeedback', 'periodIds'])
+          )
+          || (
+            isProgramMember(programId)
+            && resource.data.createdByUid == request.auth.uid
+            && resource.data.status == 'needs-revisions'
+            && request.resource.data.status == 'draft'
+            && request.resource.data.programId == resource.data.programId
+            && request.resource.data.createdByUid == resource.data.createdByUid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'name', 'category', 'description', 'photos', 'teamMembers',
+              'pastProjectHandlers', 'communicationLogs', 'externalLinks',
+              'status', 'submissionDate', 'approvedDate', 'facilitatorFeedback'
+            ])
+            && request.resource.data.name is string
+            && request.resource.data.photos is list
+            && request.resource.data.photos.size() <= 5
+            && request.resource.data.submissionDate is string
+            && request.resource.data.approvedDate == null
+            && !request.resource.data.keys().hasAny(['facilitatorFeedback'])
+          );
+        allow delete: if isAdmin() || isProgramOwner(programId);
+      }
+    }
+  }
+}

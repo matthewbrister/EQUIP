@@ -12,7 +12,7 @@ const TOURS = {
     steps: [
       { view: 'landing', role: 'guest', selector: null, title: 'Facilitator walkthrough', body: "This tour follows what a facilitator sees, from logging in to managing a program. Use Next to continue, or Skip to return to the role list." },
       { view: 'landing', role: 'guest', selector: '[data-tour="hero-actions"]', title: 'The landing page', body: 'Visitors can log in, browse the public directory, or read about EQUIP. Facilitators start with Log In.' },
-      { view: 'auth', role: 'guest', selector: '[data-tour="auth-card"]', title: 'Signing up', body: 'Facilitators choose Sign Up, pick "Facilitator", connect Google, and confirm their details. A website manager must approve the account before a program can be created.' },
+      { view: 'auth', role: 'guest', selector: '[data-tour="auth-card"]', title: 'Signing up', body: 'Facilitators choose Sign Up, pick "Facilitator", and connect Google. A website manager must approve the account before a program can be created.' },
       { view: 'facilitator', role: 'facilitatorApproved', selector: '[data-tour="program-header"]', title: 'Your program hub', body: 'Each facilitator manages one program here. The badge shows whether it is live in the public directory or still a draft.' },
       { view: 'facilitator', role: 'facilitatorApproved', selector: '[data-tour="access-code"]', title: 'Student access code', body: 'Share this code with your students. Copy it, project it as a QR code, or regenerate it at any time.' },
       { view: 'facilitator', role: 'facilitatorApproved', selector: '.tabs-header', title: 'Your workspace', body: 'Technology, projects, roster and program details each have a tab. We will visit the key ones next.' },
@@ -28,7 +28,7 @@ const TOURS = {
     steps: [
       { view: 'landing', role: 'guest', selector: null, title: 'Student walkthrough', body: 'This tour follows what a student sees, from creating an account to opening the dashboard. Use Next to continue, or Skip to return to the role list.' },
       { view: 'landing', role: 'guest', selector: '[data-tour="hero-actions"]', title: 'The landing page', body: 'Students start with Log In. The public directory is open to everyone.' },
-      { view: 'auth', role: 'guest', selector: '[data-tour="auth-card"]', title: 'Creating your account', body: 'Choose Sign Up, pick "Student", choose your grade (K to 12), connect Google, and confirm your details. No password to remember.' },
+      { view: 'auth', role: 'guest', selector: '[data-tour="auth-card"]', title: 'Creating your account', body: 'Choose Sign Up, pick "Student", choose your grade (K to 12), and connect Google. Google supplies only name, email, and profile picture.' },
       { view: 'join', role: 'studentNew', selector: '[data-tour="code-card"]', title: 'Enter your access code', body: "After signing up you will see this page. There is no dashboard until you enter the code from your facilitator. The code adds you to your program's roster." },
       { view: 'student', role: 'studentJoined', selector: '.tabs-header', title: 'Your dashboard', body: 'Once you are on a roster you can check which equipment is ready, read manuals, and submit your own projects for approval.' },
       { view: 'public', role: 'studentJoined', selector: '[data-tour="public-profile"]', title: 'The public directory', body: 'Anyone can browse programs here. A program only shows its technology and projects if the facilitator makes them public.' },

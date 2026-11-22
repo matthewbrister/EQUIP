@@ -1,32 +1,30 @@
 import React, { useState } from 'react';
 import Dropdown from '../Dropdown';
+import { uploadImage } from '../../lib/cloudinary';
 
-const PRESET_PROJECT_PHOTOS = [
-  'https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=800&auto=format&fit=crop&q=80',
-  'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=800&auto=format&fit=crop&q=80',
-  'https://images.unsplash.com/photo-1585320806297-9794b3e4eeae?w=800&auto=format&fit=crop&q=80'
-];
-
-export default function NewProjectModal({ isOpen, onClose, onAdd, studentUser }) {
-  const [name, setName] = useState('');
-  const [category, setCategory] = useState('GIS & Community Service');
-  const [description, setDescription] = useState('');
-  const [selectedPhoto, setSelectedPhoto] = useState(PRESET_PROJECT_PHOTOS[0]);
+export default function NewProjectModal({ isOpen, onClose, onAdd, studentUser, project = null }) {
+  const isEditing = Boolean(project);
+  const [name, setName] = useState(project?.name || '');
+  const [category, setCategory] = useState(project?.category || 'GIS & Community Service');
+  const [description, setDescription] = useState(project?.description || '');
+  const [selectedPhoto, setSelectedPhoto] = useState(project?.photos?.[0] || '');
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [photoError, setPhotoError] = useState('');
 
   // Team members
-  const [teamMembers, setTeamMembers] = useState([
-    { name: studentUser?.name || 'My Name', role: 'Team Lead', grade: studentUser?.grade || '11th' }
-  ]);
+  const [teamMembers, setTeamMembers] = useState(project?.teamMembers?.length
+    ? project.teamMembers
+    : [{ name: studentUser?.name || 'My Name', role: 'Team Lead', grade: studentUser?.grade || '11th' }]);
   const [newMemberName, setNewMemberName] = useState('');
   const [newMemberRole, setNewMemberRole] = useState('');
   const [newMemberGrade, setNewMemberGrade] = useState('11th');
 
   // Past project handlers
-  const [pastHandlers, setPastHandlers] = useState([]);
+  const [pastHandlers, setPastHandlers] = useState(project?.pastProjectHandlers || []);
   const [newHandlerText, setNewHandlerText] = useState('');
 
   // Communication logs
-  const [commLogs, setCommLogs] = useState([]);
+  const [commLogs, setCommLogs] = useState(project?.communicationLogs || []);
   const [logContact, setLogContact] = useState('');
   const [logType, setLogType] = useState('Partner Meeting');
   const [logNotes, setLogNotes] = useState('');
@@ -77,22 +75,38 @@ export default function NewProjectModal({ isOpen, onClose, onAdd, studentUser })
     setCommLogs(commLogs.filter((_, i) => i !== idx));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!name.trim()) return;
 
-    onAdd({
-      name,
+    const result = await onAdd({
+      ...(project ? { id: project.id } : {}),
+      name: name.trim(),
       category,
       description,
-      photos: [selectedPhoto],
+      photos: selectedPhoto ? [selectedPhoto] : [],
       teamMembers,
       pastProjectHandlers: pastHandlers,
       communicationLogs: commLogs,
-      externalLinks: []
+      externalLinks: project?.externalLinks || []
     });
 
-    onClose();
+    if (result?.id) onClose();
+  };
+
+  const handlePhotoChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingPhoto(true);
+    setPhotoError('');
+    try {
+      setSelectedPhoto(await uploadImage(file));
+    } catch (error) {
+      setPhotoError(error.message);
+    } finally {
+      setIsUploadingPhoto(false);
+      e.target.value = '';
+    }
   };
 
   return (
@@ -102,8 +116,10 @@ export default function NewProjectModal({ isOpen, onClose, onAdd, studentUser })
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <i className='bx bx-folder-plus' style={{ fontSize: '1.3rem', color: 'var(--color-primary)' }}></i>
             <div>
-              <h3 className="modal-title">Upload Project</h3>
-              <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Draft proposal for facilitator review</p>
+              <h3 className="modal-title">{isEditing ? 'Revise Project' : 'Upload Project'}</h3>
+              <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                {isEditing ? 'Update the requested items and resubmit for facilitator review' : 'Draft proposal for facilitator review'}
+              </p>
             </div>
           </div>
           <button className="btn btn-secondary btn-icon" onClick={onClose} aria-label="Close">
@@ -116,7 +132,9 @@ export default function NewProjectModal({ isOpen, onClose, onAdd, studentUser })
             <div className="alert-box alert-info">
               <i className='bx bx-info-circle'></i>
               <div style={{ fontSize: '0.82rem' }}>
-                Submissions are saved as <strong>Draft</strong> and will be published once approved by your facilitator.
+                {isEditing
+                  ? 'Your revised project will return to your facilitator for review.'
+                  : <>Submissions are saved as <strong>Draft</strong> and will be published once approved by your facilitator.</>}
               </div>
             </div>
 
@@ -131,6 +149,14 @@ export default function NewProjectModal({ isOpen, onClose, onAdd, studentUser })
                   onChange={(e) => setName(e.target.value)}
                   required
                 />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Project Image</label>
+                <input type="file" className="form-input" accept="image/*" onChange={handlePhotoChange} disabled={isUploadingPhoto} />
+                {isUploadingPhoto && <div className="form-help-text">Uploading image…</div>}
+                {photoError && <div className="form-help-text" role="alert" style={{ color: 'var(--color-danger)' }}>{photoError}</div>}
+                {selectedPhoto && <img src={selectedPhoto} alt="Project preview" style={{ width: 160, height: 100, objectFit: 'cover', borderRadius: 'var(--radius-sm)', marginTop: '0.5rem' }} />}
               </div>
 
               <div className="form-group">
@@ -302,8 +328,8 @@ export default function NewProjectModal({ isOpen, onClose, onAdd, studentUser })
             <button type="button" className="btn btn-secondary" onClick={onClose}>
               Cancel
             </button>
-            <button type="submit" className="btn btn-primary">
-              Submit Draft
+            <button type="submit" className="btn btn-primary" disabled={isUploadingPhoto}>
+              {isUploadingPhoto ? 'Uploading…' : isEditing ? 'Resubmit for Review' : 'Submit Draft'}
             </button>
           </div>
         </form>

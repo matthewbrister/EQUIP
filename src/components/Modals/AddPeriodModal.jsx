@@ -21,9 +21,9 @@ export default function AddPeriodModal({ isOpen, onClose, onAdd }) {
 
     if (!isOpen) return null;
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
-        const res = onAdd(name);
+        const res = await onAdd(name);
         if (res.success) onClose();
         else setError(res.message);
     };

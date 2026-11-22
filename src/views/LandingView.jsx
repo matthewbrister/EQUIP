@@ -1,11 +1,9 @@
 import React from 'react';
 import { equipStore } from '../data/store';
-import { DEFAULT_PROGRAM_ID } from '../data/mockData';
 
-export default function LandingView({ setCurrentView, onSelectRole }) {
+export default function LandingView({ setCurrentView }) {
   const programs = equipStore.getPrograms()
-    .filter(p => p.status === 'approved')
-    .sort((a, b) => (b.id === DEFAULT_PROGRAM_ID) - (a.id === DEFAULT_PROGRAM_ID));
+    .filter(p => p.status === 'approved');
 
   // Two identical halves so the marquee loops seamlessly
   const half = programs.length ? Array.from({ length: Math.ceil(4 / programs.length) }, () => programs).flat() : [];
@@ -130,7 +128,7 @@ export default function LandingView({ setCurrentView, onSelectRole }) {
           </div>
         </div>
 
-        {track.length > 0 && (
+        {track.length > 0 ? (
           <div className="featured-marquee">
             <div className="featured-track" style={{ animationDuration: `${half.length * 7}s` }}>
               {track.map((prog, i) => {
@@ -162,6 +160,12 @@ export default function LandingView({ setCurrentView, onSelectRole }) {
                 );
               })}
             </div>
+          </div>
+        ) : (
+          <div className="container">
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+              No approved programs are listed yet.
+            </p>
           </div>
         )}
       </section>

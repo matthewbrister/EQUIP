@@ -11,6 +11,7 @@ export default function StudentDashboardView({ currentUser, setCurrentView }) {
   
   // Modals state
   const [isNewProjectOpen, setIsNewProjectOpen] = useState(false);
+  const [editingProject, setEditingProject] = useState(null);
   const [selectedTech, setSelectedTech] = useState(null);
   const [selectedProject, setSelectedProject] = useState(null);
 
@@ -19,6 +20,13 @@ export default function StudentDashboardView({ currentUser, setCurrentView }) {
 
   // If student hasn't entered code yet
   if (!studentProgram) {
+    if (currentUser.programId && equipStore.isLoadingPrograms()) {
+      return (
+        <div className="container" style={{ padding: '3.5rem 1.25rem', textAlign: 'center' }}>
+          <div className="card" style={{ padding: '2rem' }}>Loading your program…</div>
+        </div>
+      );
+    }
     return (
       <div className="container" style={{ padding: '3.5rem 1.25rem', maxWidth: '540px', textAlign: 'center' }}>
         <div className="card" style={{ padding: '2.5rem 1.5rem' }}>
@@ -53,14 +61,23 @@ export default function StudentDashboardView({ currentUser, setCurrentView }) {
   // Projects
   const allProjects = studentProgram.projects || [];
   const myProjects = allProjects.filter(p => 
-    p.submittedBy === currentUser.name || 
+    p.createdByUid === currentUser.id ||
+    p.submittedBy === currentUser.name ||
     (p.teamMembers && p.teamMembers.some(m => m.name.toLowerCase() === currentUser.name.toLowerCase()))
   );
   const approvedPeerProjects = allProjects.filter(p => p.status === 'approved');
 
-  const handleAddProject = (projectData) => {
-    equipStore.addProject(studentProgram.id, projectData, currentUser);
-    setActiveTab('my-projects');
+  const handleAddProject = async (projectData) => {
+    const result = projectData.id
+      ? await equipStore.reviseProject(studentProgram.id, projectData.id, projectData, currentUser)
+      : await equipStore.addProject(studentProgram.id, projectData, currentUser);
+    if (result?.id) setActiveTab('my-projects');
+    return result;
+  };
+
+  const handleEditProject = (project) => {
+    setSelectedProject(null);
+    setEditingProject(project);
   };
 
   return (
@@ -84,9 +101,6 @@ export default function StudentDashboardView({ currentUser, setCurrentView }) {
             <button className="btn btn-primary btn-sm" onClick={() => setIsNewProjectOpen(true)}>
               <i className='bx bx-plus'></i>
               <span>Upload Project Draft</span>
-            </button>
-            <button className="btn btn-secondary btn-sm" onClick={() => setCurrentView('join')}>
-              Change Lab
             </button>
           </div>
         </div>
@@ -322,12 +336,19 @@ export default function StudentDashboardView({ currentUser, setCurrentView }) {
       )}
 
       {/* Modals */}
-      <NewProjectModal
-        isOpen={isNewProjectOpen}
-        onClose={() => setIsNewProjectOpen(false)}
-        onAdd={handleAddProject}
-        studentUser={currentUser}
-      />
+      {(isNewProjectOpen || editingProject) && (
+        <NewProjectModal
+          key={editingProject?.id || 'new-project'}
+          isOpen
+          onClose={() => {
+            setIsNewProjectOpen(false);
+            setEditingProject(null);
+          }}
+          onAdd={handleAddProject}
+          studentUser={currentUser}
+          project={editingProject}
+        />
+      )}
 
       <TechDetailModal
         tech={selectedTech}
@@ -341,6 +362,8 @@ export default function StudentDashboardView({ currentUser, setCurrentView }) {
         isOpen={!!selectedProject}
         onClose={() => setSelectedProject(null)}
         isFacilitator={false}
+        isOwner={selectedProject?.createdByUid === currentUser.id}
+        onEdit={handleEditProject}
       />
     </div>
   );

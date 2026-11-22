@@ -1,20 +1,15 @@
 import React, { useState } from 'react';
 import Dropdown from '../Dropdown';
-
-const PRESET_PHOTOS = [
-  { label: '3D Printer', url: 'https://images.unsplash.com/photo-1631541909061-71e349d1f203?w=800&auto=format&fit=crop&q=80' },
-  { label: 'Camera', url: 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=800&auto=format&fit=crop&q=80' },
-  { label: 'Workstation', url: 'https://images.unsplash.com/photo-1587202372775-e229f172b9d7?w=800&auto=format&fit=crop&q=80' },
-  { label: 'Embroidery', url: 'https://images.unsplash.com/photo-1605289982774-9a6fef564df8?w=800&auto=format&fit=crop&q=80' },
-  { label: 'Laser', url: 'https://images.unsplash.com/photo-1504917599217-d4dc5ebe6122?w=800&auto=format&fit=crop&q=80' }
-];
+import { uploadImage } from '../../lib/cloudinary';
 
 export default function AddTechModal({ isOpen, onClose, onAdd }) {
   const [name, setName] = useState('');
   const [category, setCategory] = useState('3D Printing & Fabrication');
   const [status, setStatus] = useState('working');
   const [assetNumber, setAssetNumber] = useState('');
-  const [photo, setPhoto] = useState(PRESET_PHOTOS[0].url);
+  const [photo, setPhoto] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
   const [note, setNote] = useState('');
   const [hasSensitiveData, setHasSensitiveData] = useState(false);
   const [dataLocation, setDataLocation] = useState('');
@@ -22,11 +17,11 @@ export default function AddTechModal({ isOpen, onClose, onAdd }) {
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!name.trim()) return;
 
-    onAdd({
+    const result = await onAdd({
       name,
       category,
       status,
@@ -38,7 +33,22 @@ export default function AddTechModal({ isOpen, onClose, onAdd }) {
       manualUrl
     });
 
-    onClose();
+    if (result?.id) onClose();
+  };
+
+  const handleImageChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploading(true);
+    setUploadError('');
+    try {
+      setPhoto(await uploadImage(file));
+    } catch (error) {
+      setUploadError(error.message);
+    } finally {
+      setIsUploading(false);
+      e.target.value = '';
+    }
   };
 
   return (
@@ -70,6 +80,14 @@ export default function AddTechModal({ isOpen, onClose, onAdd }) {
                   onChange={(e) => setName(e.target.value)}
                   required
                 />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Equipment Photo</label>
+                <input type="file" className="form-input" accept="image/*" onChange={handleImageChange} disabled={isUploading} />
+                {isUploading && <div className="form-help-text">Uploading image…</div>}
+                {uploadError && <div className="form-help-text" role="alert" style={{ color: 'var(--color-danger)' }}>{uploadError}</div>}
+                {photo && <img src={photo} alt="Equipment preview" style={{ width: 120, height: 80, objectFit: 'cover', borderRadius: 'var(--radius-sm)', marginTop: '0.5rem' }} />}
               </div>
 
               <div className="form-group">
@@ -175,7 +193,7 @@ export default function AddTechModal({ isOpen, onClose, onAdd }) {
             <button type="button" className="btn btn-secondary" onClick={onClose}>
               Cancel
             </button>
-            <button type="submit" className="btn btn-primary">
+            <button type="submit" className="btn btn-primary" disabled={isUploading}>
               Save Technology
             </button>
           </div>
